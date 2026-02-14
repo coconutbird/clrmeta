@@ -17,4 +17,3 @@ thiserror = "2"
 
 [lints.clippy]
 all = { level = "warn", priority = -1 }
-
