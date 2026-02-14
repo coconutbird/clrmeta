@@ -148,6 +148,30 @@ impl<'a> Reader<'a> {
         }
     }
 
+    /// Read a compressed signed integer (ECMA-335 II.23.2).
+    pub fn read_compressed_int(&mut self) -> Result<i32> {
+        let unsigned = self.read_compressed_uint()?;
+        // Rotate right by 1 and sign-extend if the original LSB was 1
+        let rotated = unsigned >> 1;
+        if unsigned & 1 == 0 {
+            Ok(rotated as i32)
+        } else {
+            // Negative: complement the rotated value
+            Ok(-(rotated as i32) - 1)
+        }
+    }
+
+    /// Peek at the next byte without consuming it.
+    pub fn peek_u8(&self) -> Result<u8> {
+        if self.pos >= self.data.len() {
+            return Err(Error::UnexpectedEof {
+                offset: self.pos,
+                needed: 1,
+            });
+        }
+        Ok(self.data[self.pos])
+    }
+
     /// Get a sub-reader for a specific range.
     #[must_use]
     pub fn slice(&self, offset: usize, len: usize) -> Option<Reader<'a>> {

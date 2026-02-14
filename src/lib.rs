@@ -35,18 +35,20 @@
 //! let modified_bytes = metadata.write();
 //! ```
 
+pub mod crypto;
 pub mod error;
 pub mod heaps;
 pub mod metadata;
 pub mod reader;
 pub mod root;
+pub mod signature;
 pub mod stream;
 pub mod tables;
 pub mod writer;
 
 // Re-export main types
 pub use error::{Error, Result};
-pub use metadata::{AssemblyInfo, AssemblyRefInfo, Metadata, MethodInfo, TypeInfo};
+pub use metadata::{AssemblyInfo, AssemblyRefInfo, Metadata, MethodInfo, ResolvedType, TypeInfo};
 pub use root::MetadataRoot;
 pub use stream::StreamHeader;
 
@@ -64,4 +66,9 @@ pub use tables::{
     InterfaceImplRow, MemberRefRow, MethodDefRow, MethodImplRow, MethodPtrRow, MethodSemanticsRow,
     MethodSpecRow, ModuleRefRow, ModuleRow, NestedClassRow, ParamPtrRow, ParamRow, PropertyMapRow,
     PropertyPtrRow, PropertyRow, StandAloneSigRow, TypeDefRow, TypeRefRow, TypeSpecRow,
+};
+
+// Re-export signature types
+pub use signature::{
+    CallingConvention, ElementType, FieldSig, LocalVarSig, MethodSig, PropertySig, TypeSig,
 };

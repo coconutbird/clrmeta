@@ -512,6 +512,206 @@ impl Metadata {
     }
 
     // ========================================================================
+    // Type Hierarchy Resolution
+    // ========================================================================
+
+    /// Get the TypeDef row at the given 1-based index.
+    #[must_use]
+    pub fn get_type_def(&self, index: u32) -> Option<&TypeDefRow> {
+        if index == 0 || index as usize > self.type_defs.len() {
+            return None;
+        }
+        Some(&self.type_defs[(index - 1) as usize])
+    }
+
+    /// Get the TypeRef row at the given 1-based index.
+    #[must_use]
+    pub fn get_type_ref(&self, index: u32) -> Option<&TypeRefRow> {
+        if index == 0 || index as usize > self.type_refs.len() {
+            return None;
+        }
+        Some(&self.type_refs[(index - 1) as usize])
+    }
+
+    /// Get the TypeSpec row at the given 1-based index.
+    #[must_use]
+    pub fn get_type_spec(&self, index: u32) -> Option<&TypeSpecRow> {
+        if index == 0 || index as usize > self.type_specs.len() {
+            return None;
+        }
+        Some(&self.type_specs[(index - 1) as usize])
+    }
+
+    /// Resolve a TypeDefOrRef coded index to a type reference.
+    #[must_use]
+    pub fn resolve_type(&self, coded_index: &crate::tables::CodedIndex) -> Option<ResolvedType> {
+        if coded_index.is_null() {
+            return None;
+        }
+
+        match coded_index.table? {
+            TableId::TypeDef => {
+                let row = self.get_type_def(coded_index.row)?;
+                let name = self.strings.get(row.type_name).ok()?.to_string();
+                let namespace = if row.type_namespace != 0 {
+                    self.strings.get(row.type_namespace).ok().map(|s| s.to_string())
+                } else {
+                    None
+                };
+                Some(ResolvedType::TypeDef {
+                    index: coded_index.row,
+                    name,
+                    namespace,
+                })
+            }
+            TableId::TypeRef => {
+                let row = self.get_type_ref(coded_index.row)?;
+                let name = self.strings.get(row.type_name).ok()?.to_string();
+                let namespace = if row.type_namespace != 0 {
+                    self.strings.get(row.type_namespace).ok().map(|s| s.to_string())
+                } else {
+                    None
+                };
+                Some(ResolvedType::TypeRef {
+                    index: coded_index.row,
+                    name,
+                    namespace,
+                })
+            }
+            TableId::TypeSpec => {
+                let row = self.get_type_spec(coded_index.row)?;
+                Some(ResolvedType::TypeSpec {
+                    index: coded_index.row,
+                    signature: row.signature,
+                })
+            }
+            _ => None,
+        }
+    }
+
+    /// Get the base type of a TypeDef by index (1-based).
+    #[must_use]
+    pub fn get_base_type(&self, type_def_index: u32) -> Option<ResolvedType> {
+        let row = self.get_type_def(type_def_index)?;
+        self.resolve_type(&row.extends)
+    }
+
+    /// Get all interfaces implemented by a TypeDef (1-based index).
+    pub fn get_interfaces(&self, type_def_index: u32) -> Vec<ResolvedType> {
+        self.interface_impls
+            .iter()
+            .filter(|row| row.class == type_def_index)
+            .filter_map(|row| self.resolve_type(&row.interface))
+            .collect()
+    }
+
+    /// Get methods belonging to a TypeDef (1-based index).
+    pub fn get_type_methods(&self, type_def_index: u32) -> Vec<(u32, &MethodDefRow)> {
+        let row = match self.get_type_def(type_def_index) {
+            Some(r) => r,
+            None => return Vec::new(),
+        };
+
+        let start = row.method_list;
+        let end = self
+            .get_type_def(type_def_index + 1)
+            .map(|r| r.method_list)
+            .unwrap_or((self.method_defs.len() + 1) as u32);
+
+        ((start as usize)..(end as usize))
+            .filter_map(|i| {
+                if i > 0 && i <= self.method_defs.len() {
+                    Some((i as u32, &self.method_defs[i - 1]))
+                } else {
+                    None
+                }
+            })
+            .collect()
+    }
+
+    /// Get fields belonging to a TypeDef (1-based index).
+    pub fn get_type_fields(&self, type_def_index: u32) -> Vec<(u32, &FieldRow)> {
+        let row = match self.get_type_def(type_def_index) {
+            Some(r) => r,
+            None => return Vec::new(),
+        };
+
+        let start = row.field_list;
+        let end = self
+            .get_type_def(type_def_index + 1)
+            .map(|r| r.field_list)
+            .unwrap_or((self.fields.len() + 1) as u32);
+
+        ((start as usize)..(end as usize))
+            .filter_map(|i| {
+                if i > 0 && i <= self.fields.len() {
+                    Some((i as u32, &self.fields[i - 1]))
+                } else {
+                    None
+                }
+            })
+            .collect()
+    }
+
+    /// Find a TypeDef by name (exact match).
+    pub fn find_type(&self, name: &str, namespace: Option<&str>) -> Option<(u32, &TypeDefRow)> {
+        for (i, row) in self.type_defs.iter().enumerate() {
+            let type_name = self.strings.get(row.type_name).ok()?;
+            if type_name != name {
+                continue;
+            }
+
+            let type_ns = if row.type_namespace != 0 {
+                self.strings.get(row.type_namespace).ok()
+            } else {
+                None
+            };
+
+            match (namespace, type_ns) {
+                (Some(ns), Some(tns)) if ns == tns => return Some(((i + 1) as u32, row)),
+                (None, None) | (None, Some("")) => return Some(((i + 1) as u32, row)),
+                (Some(""), None) | (Some(""), Some("")) => return Some(((i + 1) as u32, row)),
+                _ => continue,
+            }
+        }
+        None
+    }
+
+    /// Get the owning type of a method (1-based method index).
+    #[must_use]
+    pub fn get_method_owner(&self, method_index: u32) -> Option<(u32, &TypeDefRow)> {
+        for (i, row) in self.type_defs.iter().enumerate() {
+            let start = row.method_list;
+            let end = self
+                .get_type_def((i + 2) as u32)
+                .map(|r| r.method_list)
+                .unwrap_or((self.method_defs.len() + 1) as u32);
+
+            if method_index >= start && method_index < end {
+                return Some(((i + 1) as u32, row));
+            }
+        }
+        None
+    }
+
+    /// Get the owning type of a field (1-based field index).
+    #[must_use]
+    pub fn get_field_owner(&self, field_index: u32) -> Option<(u32, &TypeDefRow)> {
+        for (i, row) in self.type_defs.iter().enumerate() {
+            let start = row.field_list;
+            let end = self
+                .get_type_def((i + 2) as u32)
+                .map(|r| r.field_list)
+                .unwrap_or((self.fields.len() + 1) as u32);
+
+            if field_index >= start && field_index < end {
+                return Some(((i + 1) as u32, row));
+            }
+        }
+        None
+    }
+
+    // ========================================================================
     // Validation
     // ========================================================================
 
@@ -751,9 +951,20 @@ impl AssemblyInfo {
     /// Compute the public key token (last 8 bytes of SHA-1 hash, reversed).
     #[must_use]
     pub fn public_key_token(&self) -> Option<[u8; 8]> {
-        // Note: Requires SHA-1 hashing which we don't implement here
-        // Return None for now - users can compute this externally
-        None
+        self.public_key
+            .as_ref()
+            .map(|pk| crate::crypto::public_key_token(pk))
+    }
+
+    /// Format the public key token as a hex string (e.g., "b77a5c561934e089").
+    #[must_use]
+    pub fn public_key_token_string(&self) -> Option<String> {
+        self.public_key_token().map(|token| {
+            token
+                .iter()
+                .map(|b| format!("{b:02x}"))
+                .collect::<String>()
+        })
     }
 }
 
@@ -817,6 +1028,72 @@ impl AssemblyRefInfo {
             "{}.{}.{}.{}",
             self.version.0, self.version.1, self.version.2, self.version.3
         )
+    }
+}
+
+/// A resolved type reference from a TypeDefOrRef coded index.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ResolvedType {
+    /// A type defined in this assembly (TypeDef table).
+    TypeDef {
+        /// 1-based row index in TypeDef table.
+        index: u32,
+        /// Type name.
+        name: String,
+        /// Namespace (None if empty).
+        namespace: Option<String>,
+    },
+    /// A type referenced from another assembly (TypeRef table).
+    TypeRef {
+        /// 1-based row index in TypeRef table.
+        index: u32,
+        /// Type name.
+        name: String,
+        /// Namespace (None if empty).
+        namespace: Option<String>,
+    },
+    /// A generic type instantiation (TypeSpec table).
+    TypeSpec {
+        /// 1-based row index in TypeSpec table.
+        index: u32,
+        /// Signature blob index.
+        signature: u32,
+    },
+}
+
+impl ResolvedType {
+    /// Get the full name of the type (namespace.name or just name).
+    #[must_use]
+    pub fn full_name(&self) -> String {
+        match self {
+            Self::TypeDef { name, namespace, .. } | Self::TypeRef { name, namespace, .. } => {
+                if let Some(ns) = namespace {
+                    if !ns.is_empty() {
+                        return format!("{ns}.{name}");
+                    }
+                }
+                name.clone()
+            }
+            Self::TypeSpec { signature, .. } => format!("<TypeSpec sig={signature}>"),
+        }
+    }
+
+    /// Check if this is a TypeDef (defined in current assembly).
+    #[must_use]
+    pub const fn is_type_def(&self) -> bool {
+        matches!(self, Self::TypeDef { .. })
+    }
+
+    /// Check if this is a TypeRef (external reference).
+    #[must_use]
+    pub const fn is_type_ref(&self) -> bool {
+        matches!(self, Self::TypeRef { .. })
+    }
+
+    /// Check if this is a TypeSpec (generic instantiation).
+    #[must_use]
+    pub const fn is_type_spec(&self) -> bool {
+        matches!(self, Self::TypeSpec { .. })
     }
 }
 
