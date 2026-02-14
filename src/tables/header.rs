@@ -50,9 +50,9 @@ impl TablesHeader {
 
         // Read row counts for each valid table
         let mut row_counts = [0u32; 64];
-        for i in 0..64 {
+        for (i, count) in row_counts.iter_mut().enumerate() {
             if valid & (1u64 << i) != 0 {
-                row_counts[i] = reader.read_u32()?;
+                *count = reader.read_u32()?;
             }
         }
 

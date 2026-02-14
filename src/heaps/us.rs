@@ -44,7 +44,7 @@ impl UserStringsHeap {
         // The blob length includes a trailing byte indicating if any chars are > 0x7F
         let str_len = blob_len.saturating_sub(1);
 
-        if str_len % 2 != 0 {
+        if !str_len.is_multiple_of(2) {
             return Err(Error::InvalidUserString(offset));
         }
 

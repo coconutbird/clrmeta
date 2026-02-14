@@ -983,10 +983,10 @@ impl TypeInfo {
     /// Get the full name (namespace.name or just name).
     #[must_use]
     pub fn full_name(&self) -> String {
-        if let Some(ns) = &self.namespace {
-            if !ns.is_empty() {
-                return format!("{}.{}", ns, self.name);
-            }
+        if let Some(ns) = &self.namespace
+            && !ns.is_empty()
+        {
+            return format!("{}.{}", ns, self.name);
         }
         self.name.clone()
     }
@@ -1067,10 +1067,10 @@ impl ResolvedType {
     pub fn full_name(&self) -> String {
         match self {
             Self::TypeDef { name, namespace, .. } | Self::TypeRef { name, namespace, .. } => {
-                if let Some(ns) = namespace {
-                    if !ns.is_empty() {
-                        return format!("{ns}.{name}");
-                    }
+                if let Some(ns) = namespace
+                    && !ns.is_empty()
+                {
+                    return format!("{ns}.{name}");
                 }
                 name.clone()
             }
