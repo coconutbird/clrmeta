@@ -1,0 +1,17 @@
+[package]
+name = "clrmeta"
+version = "0.1.0"
+edition = "2024"
+description = "ECMA-335 CLI/.NET metadata parsing library with read/write support"
+license = "MIT"
+repository = "https://github.com/coconutbird/clrmeta"
+readme = "README.md"
+keywords = ["clr", "dotnet", "metadata", "ecma-335", "msil"]
+categories = ["parsing", "development-tools"]
+
+[dependencies]
+thiserror = "2"
+
+[lints.clippy]
+all = { level = "warn", priority = -1 }
+

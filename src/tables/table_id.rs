@@ -1,0 +1,168 @@
+//! Metadata table identifiers.
+
+use crate::error::{Error, Result};
+
+/// Metadata table identifiers (ECMA-335 II.22).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[repr(u8)]
+pub enum TableId {
+    Module = 0x00,
+    TypeRef = 0x01,
+    TypeDef = 0x02,
+    FieldPtr = 0x03,
+    Field = 0x04,
+    MethodPtr = 0x05,
+    MethodDef = 0x06,
+    ParamPtr = 0x07,
+    Param = 0x08,
+    InterfaceImpl = 0x09,
+    MemberRef = 0x0A,
+    Constant = 0x0B,
+    CustomAttribute = 0x0C,
+    FieldMarshal = 0x0D,
+    DeclSecurity = 0x0E,
+    ClassLayout = 0x0F,
+    FieldLayout = 0x10,
+    StandAloneSig = 0x11,
+    EventMap = 0x12,
+    EventPtr = 0x13,
+    Event = 0x14,
+    PropertyMap = 0x15,
+    PropertyPtr = 0x16,
+    Property = 0x17,
+    MethodSemantics = 0x18,
+    MethodImpl = 0x19,
+    ModuleRef = 0x1A,
+    TypeSpec = 0x1B,
+    ImplMap = 0x1C,
+    FieldRva = 0x1D,
+    EncLog = 0x1E,
+    EncMap = 0x1F,
+    Assembly = 0x20,
+    AssemblyProcessor = 0x21,
+    AssemblyOs = 0x22,
+    AssemblyRef = 0x23,
+    AssemblyRefProcessor = 0x24,
+    AssemblyRefOs = 0x25,
+    File = 0x26,
+    ExportedType = 0x27,
+    ManifestResource = 0x28,
+    NestedClass = 0x29,
+    GenericParam = 0x2A,
+    MethodSpec = 0x2B,
+    GenericParamConstraint = 0x2C,
+    // Reserved 0x2D-0x3F
+}
+
+impl TableId {
+    /// Total number of defined tables.
+    pub const COUNT: usize = 45;
+
+    /// Maximum table ID value.
+    pub const MAX: u8 = 0x2C;
+
+    /// Convert from a u8 value.
+    pub fn from_u8(value: u8) -> Result<Self> {
+        match value {
+            0x00 => Ok(Self::Module),
+            0x01 => Ok(Self::TypeRef),
+            0x02 => Ok(Self::TypeDef),
+            0x03 => Ok(Self::FieldPtr),
+            0x04 => Ok(Self::Field),
+            0x05 => Ok(Self::MethodPtr),
+            0x06 => Ok(Self::MethodDef),
+            0x07 => Ok(Self::ParamPtr),
+            0x08 => Ok(Self::Param),
+            0x09 => Ok(Self::InterfaceImpl),
+            0x0A => Ok(Self::MemberRef),
+            0x0B => Ok(Self::Constant),
+            0x0C => Ok(Self::CustomAttribute),
+            0x0D => Ok(Self::FieldMarshal),
+            0x0E => Ok(Self::DeclSecurity),
+            0x0F => Ok(Self::ClassLayout),
+            0x10 => Ok(Self::FieldLayout),
+            0x11 => Ok(Self::StandAloneSig),
+            0x12 => Ok(Self::EventMap),
+            0x13 => Ok(Self::EventPtr),
+            0x14 => Ok(Self::Event),
+            0x15 => Ok(Self::PropertyMap),
+            0x16 => Ok(Self::PropertyPtr),
+            0x17 => Ok(Self::Property),
+            0x18 => Ok(Self::MethodSemantics),
+            0x19 => Ok(Self::MethodImpl),
+            0x1A => Ok(Self::ModuleRef),
+            0x1B => Ok(Self::TypeSpec),
+            0x1C => Ok(Self::ImplMap),
+            0x1D => Ok(Self::FieldRva),
+            0x1E => Ok(Self::EncLog),
+            0x1F => Ok(Self::EncMap),
+            0x20 => Ok(Self::Assembly),
+            0x21 => Ok(Self::AssemblyProcessor),
+            0x22 => Ok(Self::AssemblyOs),
+            0x23 => Ok(Self::AssemblyRef),
+            0x24 => Ok(Self::AssemblyRefProcessor),
+            0x25 => Ok(Self::AssemblyRefOs),
+            0x26 => Ok(Self::File),
+            0x27 => Ok(Self::ExportedType),
+            0x28 => Ok(Self::ManifestResource),
+            0x29 => Ok(Self::NestedClass),
+            0x2A => Ok(Self::GenericParam),
+            0x2B => Ok(Self::MethodSpec),
+            0x2C => Ok(Self::GenericParamConstraint),
+            _ => Err(Error::InvalidTableId(value)),
+        }
+    }
+
+    /// Get the table name.
+    #[must_use]
+    pub const fn name(self) -> &'static str {
+        match self {
+            Self::Module => "Module",
+            Self::TypeRef => "TypeRef",
+            Self::TypeDef => "TypeDef",
+            Self::FieldPtr => "FieldPtr",
+            Self::Field => "Field",
+            Self::MethodPtr => "MethodPtr",
+            Self::MethodDef => "MethodDef",
+            Self::ParamPtr => "ParamPtr",
+            Self::Param => "Param",
+            Self::InterfaceImpl => "InterfaceImpl",
+            Self::MemberRef => "MemberRef",
+            Self::Constant => "Constant",
+            Self::CustomAttribute => "CustomAttribute",
+            Self::FieldMarshal => "FieldMarshal",
+            Self::DeclSecurity => "DeclSecurity",
+            Self::ClassLayout => "ClassLayout",
+            Self::FieldLayout => "FieldLayout",
+            Self::StandAloneSig => "StandAloneSig",
+            Self::EventMap => "EventMap",
+            Self::EventPtr => "EventPtr",
+            Self::Event => "Event",
+            Self::PropertyMap => "PropertyMap",
+            Self::PropertyPtr => "PropertyPtr",
+            Self::Property => "Property",
+            Self::MethodSemantics => "MethodSemantics",
+            Self::MethodImpl => "MethodImpl",
+            Self::ModuleRef => "ModuleRef",
+            Self::TypeSpec => "TypeSpec",
+            Self::ImplMap => "ImplMap",
+            Self::FieldRva => "FieldRva",
+            Self::EncLog => "EncLog",
+            Self::EncMap => "EncMap",
+            Self::Assembly => "Assembly",
+            Self::AssemblyProcessor => "AssemblyProcessor",
+            Self::AssemblyOs => "AssemblyOs",
+            Self::AssemblyRef => "AssemblyRef",
+            Self::AssemblyRefProcessor => "AssemblyRefProcessor",
+            Self::AssemblyRefOs => "AssemblyRefOs",
+            Self::File => "File",
+            Self::ExportedType => "ExportedType",
+            Self::ManifestResource => "ManifestResource",
+            Self::NestedClass => "NestedClass",
+            Self::GenericParam => "GenericParam",
+            Self::MethodSpec => "MethodSpec",
+            Self::GenericParamConstraint => "GenericParamConstraint",
+        }
+    }
+}
+
