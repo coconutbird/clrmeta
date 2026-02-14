@@ -107,6 +107,15 @@ impl StringsHeap {
     }
 }
 
+impl<'a> IntoIterator for &'a StringsHeap {
+    type Item = (u32, &'a str);
+    type IntoIter = StringsIter<'a>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.iter()
+    }
+}
+
 /// Iterator over strings in the heap.
 pub struct StringsIter<'a> {
     heap: &'a StringsHeap,

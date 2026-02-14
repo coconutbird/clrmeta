@@ -4,6 +4,7 @@ use crate::tables::TableId;
 
 /// Kinds of coded indices used in metadata tables.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum CodedIndexKind {
     TypeDefOrRef,
     HasConstant,

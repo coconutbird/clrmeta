@@ -88,12 +88,40 @@ impl GuidHeap {
     }
 
     /// Iterate over all GUIDs in the heap with their 1-based indices.
-    pub fn iter(&self) -> impl Iterator<Item = (u32, Guid)> + '_ {
-        self.data.chunks_exact(16).enumerate().map(|(i, chunk)| {
+    pub fn iter(&self) -> GuidIter<'_> {
+        GuidIter {
+            chunks: self.data.chunks_exact(16),
+            index: 1,
+        }
+    }
+}
+
+/// Iterator over GUIDs in the heap.
+pub struct GuidIter<'a> {
+    chunks: std::slice::ChunksExact<'a, u8>,
+    index: u32,
+}
+
+impl Iterator for GuidIter<'_> {
+    type Item = (u32, Guid);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.chunks.next().map(|chunk| {
             let mut guid = [0u8; 16];
             guid.copy_from_slice(chunk);
-            ((i + 1) as u32, guid)
+            let idx = self.index;
+            self.index += 1;
+            (idx, guid)
         })
+    }
+}
+
+impl<'a> IntoIterator for &'a GuidHeap {
+    type Item = (u32, Guid);
+    type IntoIter = GuidIter<'a>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.iter()
     }
 }
 

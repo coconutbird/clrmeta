@@ -1,5 +1,7 @@
 //! #Blob heap - length-prefixed binary data.
 
+use std::collections::HashMap;
+
 use crate::error::{Error, Result};
 use crate::reader::Reader;
 use crate::writer::Writer;
@@ -9,6 +11,8 @@ use crate::writer::Writer;
 pub struct BlobHeap {
     /// Raw heap data.
     data: Vec<u8>,
+    /// Blob to offset mapping for O(1) deduplication during writes.
+    index_map: HashMap<Vec<u8>, u32>,
 }
 
 impl BlobHeap {
@@ -16,7 +20,12 @@ impl BlobHeap {
     #[must_use]
     pub fn new() -> Self {
         // Heap always starts with a null byte (empty blob at index 0)
-        Self { data: vec![0] }
+        let mut index_map = HashMap::new();
+        index_map.insert(Vec::new(), 0);
+        Self {
+            data: vec![0],
+            index_map,
+        }
     }
 
     /// Parse the blob heap from raw bytes.
@@ -24,6 +33,7 @@ impl BlobHeap {
     pub fn parse(data: &[u8]) -> Self {
         Self {
             data: data.to_vec(),
+            index_map: HashMap::new(), // Populated lazily or on demand
         }
     }
 
@@ -49,7 +59,13 @@ impl BlobHeap {
     }
 
     /// Add a blob to the heap and return its offset.
+    /// Deduplicates blobs that already exist in O(1) time.
     pub fn add(&mut self, blob: &[u8]) -> u32 {
+        // Check if blob already exists (O(1) lookup)
+        if let Some(&offset) = self.index_map.get(blob) {
+            return offset;
+        }
+
         let offset = self.data.len() as u32;
 
         // Write compressed length
@@ -59,6 +75,9 @@ impl BlobHeap {
 
         // Write blob data
         self.data.extend_from_slice(blob);
+
+        // Track for deduplication
+        self.index_map.insert(blob.to_vec(), offset);
 
         offset
     }
@@ -101,7 +120,21 @@ impl BlobHeap {
     }
 }
 
+impl<'a> IntoIterator for &'a BlobHeap {
+    type Item = (u32, &'a [u8]);
+    type IntoIter = BlobIter<'a>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.iter()
+    }
+}
+
 /// Iterator over blobs in the heap.
+///
+/// **Note:** This iterator silently stops when it encounters a malformed blob
+/// (e.g., invalid compressed length encoding). This is intentional to avoid
+/// panicking on corrupt heap data, but callers should be aware that iteration
+/// may end early if the heap contains malformed entries.
 pub struct BlobIter<'a> {
     heap: &'a BlobHeap,
     offset: usize,
@@ -179,5 +212,13 @@ mod tests {
         assert_eq!(blobs[0].1, &[] as &[u8]);
         assert_eq!(blobs[1].0, 1);
         assert_eq!(blobs[1].1, &[0xABu8, 0xCDu8]);
+    }
+
+    #[test]
+    fn test_blob_deduplication() {
+        let mut heap = BlobHeap::new();
+        let offset1 = heap.add(&[0x01, 0x02, 0x03]);
+        let offset2 = heap.add(&[0x01, 0x02, 0x03]);
+        assert_eq!(offset1, offset2);
     }
 }

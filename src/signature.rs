@@ -7,6 +7,7 @@ use crate::reader::Reader;
 
 /// Element type codes (ECMA-335 II.23.1.16).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[non_exhaustive]
 #[repr(u8)]
 pub enum ElementType {
     End = 0x00,
@@ -133,7 +134,7 @@ impl ElementType {
 }
 
 /// Calling convention flags (ECMA-335 II.23.2.1).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct CallingConvention(pub u8);
 
 impl CallingConvention {
@@ -180,6 +181,7 @@ impl CallingConvention {
 
 /// A parsed type from a signature.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum TypeSig {
     /// Primitive type (void, bool, char, i1, u1, etc.).
     Primitive(ElementType),

@@ -7,6 +7,7 @@ pub type Result<T> = std::result::Result<T, Error>;
 
 /// Errors that can occur during metadata parsing or writing.
 #[derive(Debug, Error)]
+#[non_exhaustive]
 pub enum Error {
     /// Invalid BSJB signature (expected 0x424A5342).
     #[error("invalid metadata signature: expected 0x424A5342, got 0x{0:08X}")]

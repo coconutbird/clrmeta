@@ -124,6 +124,80 @@ impl UserStringsHeap {
     pub fn write(&self) -> Vec<u8> {
         self.data.clone()
     }
+
+    /// Iterate over all user strings in the heap with their offsets.
+    pub fn iter(&self) -> UserStringsIter<'_> {
+        UserStringsIter {
+            heap: self,
+            offset: 0,
+        }
+    }
+}
+
+impl<'a> IntoIterator for &'a UserStringsHeap {
+    type Item = (u32, String);
+    type IntoIter = UserStringsIter<'a>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.iter()
+    }
+}
+
+/// Iterator over user strings in the heap.
+///
+/// **Note:** This iterator silently stops when it encounters a malformed string
+/// (e.g., invalid compressed length or invalid UTF-16 encoding). This is intentional
+/// to avoid panicking on corrupt heap data, but callers should be aware that iteration
+/// may end early if the heap contains malformed entries.
+pub struct UserStringsIter<'a> {
+    heap: &'a UserStringsHeap,
+    offset: usize,
+}
+
+impl Iterator for UserStringsIter<'_> {
+    type Item = (u32, String);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.offset >= self.heap.data.len() {
+            return None;
+        }
+
+        let start = self.offset;
+        let mut reader = Reader::new(&self.heap.data[self.offset..]);
+        let blob_len = reader.read_compressed_uint().ok()? as usize;
+        let header_size = reader.position();
+
+        if blob_len == 0 {
+            self.offset += header_size;
+            return Some((start as u32, String::new()));
+        }
+
+        // The blob length includes a trailing byte
+        let str_len = blob_len.saturating_sub(1);
+
+        if !str_len.is_multiple_of(2) {
+            return None;
+        }
+
+        let data_end = self.offset + header_size + blob_len;
+        if data_end > self.heap.data.len() {
+            return None;
+        }
+
+        let str_start = self.offset + header_size;
+        let bytes = &self.heap.data[str_start..str_start + str_len];
+
+        // Convert UTF-16LE to String
+        let utf16: Vec<u16> = bytes
+            .chunks_exact(2)
+            .map(|chunk| u16::from_le_bytes([chunk[0], chunk[1]]))
+            .collect();
+
+        let s = String::from_utf16(&utf16).ok()?;
+
+        self.offset = data_end;
+        Some((start as u32, s))
+    }
 }
 
 #[cfg(test)]

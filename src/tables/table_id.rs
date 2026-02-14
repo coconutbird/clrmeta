@@ -4,6 +4,7 @@ use crate::error::{Error, Result};
 
 /// Metadata table identifiers (ECMA-335 II.22).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 #[repr(u8)]
 pub enum TableId {
     Module = 0x00,
@@ -163,5 +164,13 @@ impl TableId {
             Self::MethodSpec => "MethodSpec",
             Self::GenericParamConstraint => "GenericParamConstraint",
         }
+    }
+}
+
+impl TryFrom<u8> for TableId {
+    type Error = Error;
+
+    fn try_from(value: u8) -> Result<Self> {
+        Self::from_u8(value)
     }
 }
