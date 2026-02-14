@@ -1017,9 +1017,7 @@ impl Metadata {
         // InterfaceImpl must be sorted by Class
         for window in self.interface_impls.windows(2) {
             if window[1].class < window[0].class {
-                errors.push(
-                    "InterfaceImpl table is not sorted by Class column".to_string(),
-                );
+                errors.push("InterfaceImpl table is not sorted by Class column".to_string());
                 break;
             }
         }
@@ -1049,9 +1047,8 @@ impl Metadata {
             let key0 = self.coded_index_sort_key(&window[0].association);
             let key1 = self.coded_index_sort_key(&window[1].association);
             if key1 < key0 {
-                errors.push(
-                    "MethodSemantics table is not sorted by Association column".to_string(),
-                );
+                errors
+                    .push("MethodSemantics table is not sorted by Association column".to_string());
                 break;
             }
         }
@@ -1059,8 +1056,7 @@ impl Metadata {
         // ClassLayout must be sorted by Parent
         for window in self.class_layouts.windows(2) {
             if window[1].parent < window[0].parent {
-                errors
-                    .push("ClassLayout table is not sorted by Parent column".to_string());
+                errors.push("ClassLayout table is not sorted by Parent column".to_string());
                 break;
             }
         }
@@ -1068,9 +1064,7 @@ impl Metadata {
         // NestedClass must be sorted by NestedClass column
         for window in self.nested_classes.windows(2) {
             if window[1].nested_class < window[0].nested_class {
-                errors.push(
-                    "NestedClass table is not sorted by NestedClass column".to_string(),
-                );
+                errors.push("NestedClass table is not sorted by NestedClass column".to_string());
                 break;
             }
         }
