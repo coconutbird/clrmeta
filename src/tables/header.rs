@@ -118,11 +118,12 @@ impl TablesHeader {
     pub fn tables(&self) -> impl Iterator<Item = (TableId, u32)> + '_ {
         (0..64u8).filter_map(move |i| {
             if self.valid & (1u64 << i) != 0 {
-                TableId::from_u8(i).ok().map(|t| (t, self.row_counts[i as usize]))
+                TableId::from_u8(i)
+                    .ok()
+                    .map(|t| (t, self.row_counts[i as usize]))
             } else {
                 None
             }
         })
     }
 }
-

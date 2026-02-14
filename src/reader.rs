@@ -159,3 +159,91 @@ impl<'a> Reader<'a> {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_read_u8() {
+        let data = [0x42, 0x43, 0x44];
+        let mut reader = Reader::new(&data);
+        assert_eq!(reader.read_u8().unwrap(), 0x42);
+        assert_eq!(reader.read_u8().unwrap(), 0x43);
+        assert_eq!(reader.read_u8().unwrap(), 0x44);
+        assert!(reader.read_u8().is_err());
+    }
+
+    #[test]
+    fn test_read_u16() {
+        let data = [0x01, 0x02, 0x03, 0x04];
+        let mut reader = Reader::new(&data);
+        assert_eq!(reader.read_u16().unwrap(), 0x0201);
+        assert_eq!(reader.read_u16().unwrap(), 0x0403);
+    }
+
+    #[test]
+    fn test_read_u32() {
+        let data = [0x01, 0x02, 0x03, 0x04];
+        let mut reader = Reader::new(&data);
+        assert_eq!(reader.read_u32().unwrap(), 0x04030201);
+    }
+
+    #[test]
+    fn test_read_null_str() {
+        let data = b"Hello\0World\0";
+        let mut reader = Reader::new(data);
+        assert_eq!(reader.read_null_str().unwrap(), "Hello");
+        assert_eq!(reader.read_null_str().unwrap(), "World");
+    }
+
+    #[test]
+    fn test_read_compressed_uint_1byte() {
+        // Values 0-127 encoded in 1 byte
+        let data = [0x00, 0x7F, 0x03];
+        let mut reader = Reader::new(&data);
+        assert_eq!(reader.read_compressed_uint().unwrap(), 0);
+        assert_eq!(reader.read_compressed_uint().unwrap(), 127);
+        assert_eq!(reader.read_compressed_uint().unwrap(), 3);
+    }
+
+    #[test]
+    fn test_read_compressed_uint_2bytes() {
+        // Values 128-16383 encoded in 2 bytes: 10xxxxxx xxxxxxxx
+        let data = [0x80, 0x80]; // 128
+        let mut reader = Reader::new(&data);
+        assert_eq!(reader.read_compressed_uint().unwrap(), 128);
+
+        let data2 = [0xBF, 0xFF]; // 16383
+        let mut reader2 = Reader::new(&data2);
+        assert_eq!(reader2.read_compressed_uint().unwrap(), 16383);
+    }
+
+    #[test]
+    fn test_read_compressed_uint_4bytes() {
+        // Values 16384-536870911 encoded in 4 bytes: 110xxxxx xxxxxxxx xxxxxxxx xxxxxxxx
+        let data = [0xC0, 0x00, 0x40, 0x00]; // 16384
+        let mut reader = Reader::new(&data);
+        assert_eq!(reader.read_compressed_uint().unwrap(), 16384);
+    }
+
+    #[test]
+    fn test_read_index() {
+        let data = [0x01, 0x02, 0x03, 0x04, 0x05, 0x06];
+        let mut reader = Reader::new(&data);
+        // Wide = false: read 2 bytes
+        assert_eq!(reader.read_index(false).unwrap(), 0x0201);
+        // Wide = true: read 4 bytes
+        assert_eq!(reader.read_index(true).unwrap(), 0x06050403);
+    }
+
+    #[test]
+    fn test_position_and_seek() {
+        let data = [0x01, 0x02, 0x03, 0x04];
+        let mut reader = Reader::new(&data);
+        assert_eq!(reader.position(), 0);
+        reader.read_u16().unwrap();
+        assert_eq!(reader.position(), 2);
+        reader.seek(0).unwrap();
+        assert_eq!(reader.position(), 0);
+    }
+}

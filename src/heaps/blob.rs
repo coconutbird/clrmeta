@@ -133,3 +133,51 @@ impl<'a> Iterator for BlobIter<'a> {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_new_heap_has_empty_blob() {
+        let heap = BlobHeap::new();
+        assert_eq!(heap.get(0).unwrap(), &[] as &[u8]);
+    }
+
+    #[test]
+    fn test_add_and_get_blob() {
+        let mut heap = BlobHeap::new();
+        let offset = heap.add(&[0x01, 0x02, 0x03]);
+        assert_eq!(heap.get(offset).unwrap(), &[0x01, 0x02, 0x03]);
+    }
+
+    #[test]
+    fn test_parse_heap() {
+        // Format: compressed length (1 byte for small) + data
+        // Empty blob at 0, then blob [0xAB, 0xCD] at offset 1
+        let data = [0x00, 0x02, 0xAB, 0xCD];
+        let heap = BlobHeap::parse(&data);
+        assert_eq!(heap.get(0).unwrap(), &[] as &[u8]);
+        assert_eq!(heap.get(1).unwrap(), &[0xAB, 0xCD]);
+    }
+
+    #[test]
+    fn test_write_heap() {
+        let mut heap = BlobHeap::new();
+        heap.add(&[0x42, 0x43]);
+        let data = heap.write();
+        // Empty blob (0x00), then length (0x02), then data
+        assert_eq!(data, vec![0x00, 0x02, 0x42, 0x43]);
+    }
+
+    #[test]
+    fn test_iter() {
+        let data = [0x00, 0x02, 0xAB, 0xCD];
+        let heap = BlobHeap::parse(&data);
+        let blobs: Vec<_> = heap.iter().collect();
+        assert_eq!(blobs.len(), 2);
+        assert_eq!(blobs[0].0, 0);
+        assert_eq!(blobs[0].1, &[] as &[u8]);
+        assert_eq!(blobs[1].0, 1);
+        assert_eq!(blobs[1].1, &[0xABu8, 0xCDu8]);
+    }
+}

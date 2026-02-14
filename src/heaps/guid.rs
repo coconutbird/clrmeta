@@ -103,11 +103,89 @@ pub fn format_guid(guid: &Guid) -> String {
     // GUID layout: Data1 (4 bytes LE), Data2 (2 bytes LE), Data3 (2 bytes LE), Data4 (8 bytes)
     format!(
         "{:02x}{:02x}{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}-{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}",
-        guid[3], guid[2], guid[1], guid[0], // Data1 (LE)
-        guid[5], guid[4],                   // Data2 (LE)
-        guid[7], guid[6],                   // Data3 (LE)
-        guid[8], guid[9],                   // Data4[0..2]
-        guid[10], guid[11], guid[12], guid[13], guid[14], guid[15] // Data4[2..8]
+        guid[3],
+        guid[2],
+        guid[1],
+        guid[0], // Data1 (LE)
+        guid[5],
+        guid[4], // Data2 (LE)
+        guid[7],
+        guid[6], // Data3 (LE)
+        guid[8],
+        guid[9], // Data4[0..2]
+        guid[10],
+        guid[11],
+        guid[12],
+        guid[13],
+        guid[14],
+        guid[15] // Data4[2..8]
     )
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_new_heap_is_empty() {
+        let heap = GuidHeap::new();
+        assert_eq!(heap.count(), 0);
+    }
+
+    #[test]
+    fn test_null_guid_index() {
+        let heap = GuidHeap::new();
+        // Index 0 returns null GUID
+        let guid = heap.get(0).unwrap();
+        assert_eq!(guid, [0u8; 16]);
+    }
+
+    #[test]
+    fn test_add_and_get_guid() {
+        let mut heap = GuidHeap::new();
+        let guid: Guid = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16];
+        let index = heap.add(&guid);
+        assert_eq!(index, 1); // 1-based indexing
+        assert_eq!(heap.get(index).unwrap(), guid);
+    }
+
+    #[test]
+    fn test_parse_heap() {
+        let data: [u8; 32] = [
+            1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16,  // GUID 1
+            17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, // GUID 2
+        ];
+        let heap = GuidHeap::parse(&data);
+        assert_eq!(heap.count(), 2);
+        assert_eq!(heap.get(1).unwrap(), [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]);
+        assert_eq!(heap.get(2).unwrap(), [17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32]);
+    }
+
+    #[test]
+    fn test_format_guid() {
+        // Standard test GUID: {550e8400-e29b-41d4-a716-446655440000}
+        // In memory (little-endian for first 3 parts):
+        let guid: Guid = [
+            0x00, 0x84, 0x0e, 0x55, // Data1: 550e8400 (LE)
+            0x9b, 0xe2,             // Data2: e29b (LE)
+            0xd4, 0x41,             // Data3: 41d4 (LE)
+            0xa7, 0x16,             // Data4[0..2]
+            0x44, 0x66, 0x55, 0x44, 0x00, 0x00, // Data4[2..8]
+        ];
+        let formatted = format_guid(&guid);
+        assert_eq!(formatted, "550e8400-e29b-41d4-a716-446655440000");
+    }
+
+    #[test]
+    fn test_iter() {
+        let data: [u8; 32] = [
+            1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16,
+            17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32,
+        ];
+        let heap = GuidHeap::parse(&data);
+        let guids: Vec<_> = heap.iter().collect();
+        assert_eq!(guids.len(), 2);
+        assert_eq!(guids[0].0, 1); // 1-based index
+        assert_eq!(guids[1].0, 2);
+    }
+}

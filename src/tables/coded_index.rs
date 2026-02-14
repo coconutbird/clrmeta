@@ -167,12 +167,95 @@ impl CodedIndex {
     #[must_use]
     pub fn encode(&self, kind: CodedIndexKind) -> u32 {
         let tables = kind.tables();
-        let tag = tables
-            .iter()
-            .position(|&t| t == self.table)
-            .unwrap_or(0) as u32;
+        let tag = tables.iter().position(|&t| t == self.table).unwrap_or(0) as u32;
         let tag_bits = kind.tag_bits();
         (self.row << tag_bits) | tag
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_tag_bits() {
+        assert_eq!(CodedIndexKind::TypeDefOrRef.tag_bits(), 2);
+        assert_eq!(CodedIndexKind::HasCustomAttribute.tag_bits(), 5);
+        assert_eq!(CodedIndexKind::HasFieldMarshal.tag_bits(), 1);
+    }
+
+    #[test]
+    fn test_null_coded_index() {
+        let idx = CodedIndex::null();
+        assert!(idx.is_null());
+        assert_eq!(idx.row, 0);
+        assert_eq!(idx.table, None);
+    }
+
+    #[test]
+    fn test_decode_type_def_or_ref() {
+        // TypeDefOrRef: 2 tag bits
+        // Tag 0 = TypeDef, Tag 1 = TypeRef, Tag 2 = TypeSpec
+
+        // Row 5, TypeDef (tag 0): (5 << 2) | 0 = 20
+        let idx = CodedIndex::decode(CodedIndexKind::TypeDefOrRef, 20);
+        assert_eq!(idx.table, Some(TableId::TypeDef));
+        assert_eq!(idx.row, 5);
+
+        // Row 3, TypeRef (tag 1): (3 << 2) | 1 = 13
+        let idx = CodedIndex::decode(CodedIndexKind::TypeDefOrRef, 13);
+        assert_eq!(idx.table, Some(TableId::TypeRef));
+        assert_eq!(idx.row, 3);
+
+        // Row 7, TypeSpec (tag 2): (7 << 2) | 2 = 30
+        let idx = CodedIndex::decode(CodedIndexKind::TypeDefOrRef, 30);
+        assert_eq!(idx.table, Some(TableId::TypeSpec));
+        assert_eq!(idx.row, 7);
+    }
+
+    #[test]
+    fn test_encode_type_def_or_ref() {
+        let idx = CodedIndex {
+            table: Some(TableId::TypeDef),
+            row: 5,
+        };
+        assert_eq!(idx.encode(CodedIndexKind::TypeDefOrRef), 20);
+
+        let idx = CodedIndex {
+            table: Some(TableId::TypeRef),
+            row: 3,
+        };
+        assert_eq!(idx.encode(CodedIndexKind::TypeDefOrRef), 13);
+    }
+
+    #[test]
+    fn test_decode_resolution_scope() {
+        // ResolutionScope: 2 tag bits
+        // Tag 0 = Module, Tag 1 = ModuleRef, Tag 2 = AssemblyRef, Tag 3 = TypeRef
+
+        // Row 1, AssemblyRef (tag 2): (1 << 2) | 2 = 6
+        let idx = CodedIndex::decode(CodedIndexKind::ResolutionScope, 6);
+        assert_eq!(idx.table, Some(TableId::AssemblyRef));
+        assert_eq!(idx.row, 1);
+    }
+
+    #[test]
+    fn test_roundtrip() {
+        let original = CodedIndex {
+            table: Some(TableId::MethodDef),
+            row: 42,
+        };
+        let encoded = original.encode(CodedIndexKind::MethodDefOrRef);
+        let decoded = CodedIndex::decode(CodedIndexKind::MethodDefOrRef, encoded);
+        assert_eq!(decoded.table, original.table);
+        assert_eq!(decoded.row, original.row);
+    }
+
+    #[test]
+    fn test_max_small_rows() {
+        // TypeDefOrRef: 2 tag bits -> max 16384 rows for 2-byte index
+        assert_eq!(CodedIndexKind::TypeDefOrRef.max_small_rows(), 16384);
+        // HasCustomAttribute: 5 tag bits -> max 2048 rows for 2-byte index
+        assert_eq!(CodedIndexKind::HasCustomAttribute.max_small_rows(), 2048);
+    }
+}

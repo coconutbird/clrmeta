@@ -137,4 +137,3 @@ impl MetadataRoot {
         self.streams.iter().find(|s| s.is_tables())
     }
 }
-

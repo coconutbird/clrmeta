@@ -43,31 +43,19 @@ impl TableContext {
     /// Get the size of a string index (2 or 4 bytes).
     #[must_use]
     pub fn string_index_size(&self) -> usize {
-        if self.wide_string_indices() {
-            4
-        } else {
-            2
-        }
+        if self.wide_string_indices() { 4 } else { 2 }
     }
 
     /// Get the size of a GUID index (2 or 4 bytes).
     #[must_use]
     pub fn guid_index_size(&self) -> usize {
-        if self.wide_guid_indices() {
-            4
-        } else {
-            2
-        }
+        if self.wide_guid_indices() { 4 } else { 2 }
     }
 
     /// Get the size of a blob index (2 or 4 bytes).
     #[must_use]
     pub fn blob_index_size(&self) -> usize {
-        if self.wide_blob_indices() {
-            4
-        } else {
-            2
-        }
+        if self.wide_blob_indices() { 4 } else { 2 }
     }
 
     /// Get the row count for a table.
@@ -85,11 +73,7 @@ impl TableContext {
     /// Get the size of a table index (2 or 4 bytes).
     #[must_use]
     pub fn table_index_size(&self, table: TableId) -> usize {
-        if self.wide_table_index(table) {
-            4
-        } else {
-            2
-        }
+        if self.wide_table_index(table) { 4 } else { 2 }
     }
 
     /// Check if a coded index uses 4 bytes.
@@ -105,20 +89,14 @@ impl TableContext {
     /// Get the size of a coded index (2 or 4 bytes).
     #[must_use]
     pub fn coded_index_size(&self, kind: CodedIndexKind) -> usize {
-        if self.wide_coded_index(kind) {
-            4
-        } else {
-            2
-        }
+        if self.wide_coded_index(kind) { 4 } else { 2 }
     }
 
     /// Calculate the row size for a given table.
     #[must_use]
     pub fn row_size(&self, table: TableId) -> usize {
         match table {
-            TableId::Module => {
-                2 + self.string_index_size() * 2 + self.guid_index_size() * 3
-            }
+            TableId::Module => 2 + self.string_index_size() * 2 + self.guid_index_size() * 3,
             TableId::TypeRef => {
                 self.coded_index_size(CodedIndexKind::ResolutionScope)
                     + self.string_index_size() * 2
@@ -131,7 +109,8 @@ impl TableContext {
             }
             TableId::Field => 2 + self.string_index_size() + self.blob_index_size(),
             TableId::MethodDef => {
-                4 + 2 + 2
+                4 + 2
+                    + 2
                     + self.string_index_size()
                     + self.blob_index_size()
                     + self.table_index_size(TableId::Param)
@@ -160,9 +139,56 @@ impl TableContext {
             TableId::AssemblyRef => {
                 2 * 4 + 4 + self.blob_index_size() * 2 + self.string_index_size() * 2
             }
-            // Add more tables as needed
-            _ => 0, // Unknown/unimplemented tables
+            TableId::FieldMarshal => {
+                self.coded_index_size(CodedIndexKind::HasFieldMarshal) + self.blob_index_size()
+            }
+            TableId::DeclSecurity => {
+                2 + self.coded_index_size(CodedIndexKind::HasDeclSecurity) + self.blob_index_size()
+            }
+            TableId::ClassLayout => 2 + 4 + self.table_index_size(TableId::TypeDef),
+            TableId::FieldLayout => 4 + self.table_index_size(TableId::Field),
+            TableId::StandAloneSig => self.blob_index_size(),
+            TableId::EventMap => {
+                self.table_index_size(TableId::TypeDef) + self.table_index_size(TableId::Event)
+            }
+            TableId::Event => {
+                2 + self.string_index_size() + self.coded_index_size(CodedIndexKind::TypeDefOrRef)
+            }
+            TableId::PropertyMap => {
+                self.table_index_size(TableId::TypeDef) + self.table_index_size(TableId::Property)
+            }
+            TableId::Property => 2 + self.string_index_size() + self.blob_index_size(),
+            TableId::MethodSemantics => {
+                2 + self.table_index_size(TableId::MethodDef)
+                    + self.coded_index_size(CodedIndexKind::HasSemantics)
+            }
+            TableId::MethodImpl => {
+                self.table_index_size(TableId::TypeDef)
+                    + self.coded_index_size(CodedIndexKind::MethodDefOrRef) * 2
+            }
+            TableId::ModuleRef => self.string_index_size(),
+            TableId::TypeSpec => self.blob_index_size(),
+            TableId::ImplMap => {
+                2 + self.coded_index_size(CodedIndexKind::MemberForwarded)
+                    + self.string_index_size()
+                    + self.table_index_size(TableId::ModuleRef)
+            }
+            TableId::FieldRva => 4 + self.table_index_size(TableId::Field),
+            TableId::NestedClass => self.table_index_size(TableId::TypeDef) * 2,
+            TableId::GenericParam => {
+                2 + 2
+                    + self.coded_index_size(CodedIndexKind::TypeOrMethodDef)
+                    + self.string_index_size()
+            }
+            TableId::MethodSpec => {
+                self.coded_index_size(CodedIndexKind::MethodDefOrRef) + self.blob_index_size()
+            }
+            TableId::GenericParamConstraint => {
+                self.table_index_size(TableId::GenericParam)
+                    + self.coded_index_size(CodedIndexKind::TypeDefOrRef)
+            }
+            // Remaining tables return 0 (not implemented)
+            _ => 0,
         }
     }
 }
-

@@ -105,4 +105,3 @@ pub fn find_stream<'a>(streams: &'a [StreamHeader], name: &str) -> Option<&'a St
 pub fn find_tables_stream(streams: &[StreamHeader]) -> Option<&StreamHeader> {
     streams.iter().find(|s| s.is_tables())
 }
-

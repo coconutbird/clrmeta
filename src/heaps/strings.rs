@@ -45,7 +45,8 @@ impl StringsHeap {
             .position(|&b| b == 0)
             .ok_or(Error::InvalidString(offset))?;
 
-        std::str::from_utf8(&self.data[offset..offset + end]).map_err(|_| Error::InvalidString(offset))
+        std::str::from_utf8(&self.data[offset..offset + end])
+            .map_err(|_| Error::InvalidString(offset))
     }
 
     /// Add a string to the heap and return its offset.
@@ -132,3 +133,53 @@ impl<'a> Iterator for StringsIter<'a> {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_new_heap_has_empty_string() {
+        let heap = StringsHeap::new();
+        assert_eq!(heap.get(0).unwrap(), "");
+    }
+
+    #[test]
+    fn test_add_and_get_string() {
+        let mut heap = StringsHeap::new();
+        let offset = heap.add("Hello");
+        assert_eq!(heap.get(offset).unwrap(), "Hello");
+    }
+
+    #[test]
+    fn test_string_deduplication() {
+        let mut heap = StringsHeap::new();
+        let offset1 = heap.add("Test");
+        let offset2 = heap.add("Test");
+        assert_eq!(offset1, offset2);
+    }
+
+    #[test]
+    fn test_parse_heap() {
+        let data = b"\0Hello\0World\0";
+        let heap = StringsHeap::parse(data);
+        assert_eq!(heap.get(0).unwrap(), "");
+        assert_eq!(heap.get(1).unwrap(), "Hello");
+        assert_eq!(heap.get(7).unwrap(), "World");
+    }
+
+    #[test]
+    fn test_write_heap() {
+        let mut heap = StringsHeap::new();
+        heap.add("Test");
+        let data = heap.write();
+        assert_eq!(data, b"\0Test\0");
+    }
+
+    #[test]
+    fn test_iter() {
+        let data = b"\0Hello\0World\0";
+        let heap = StringsHeap::parse(data);
+        let strings: Vec<_> = heap.iter().collect();
+        assert_eq!(strings, vec![(0, ""), (1, "Hello"), (7, "World")]);
+    }
+}

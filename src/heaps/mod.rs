@@ -6,7 +6,6 @@ mod strings;
 mod us;
 
 pub use blob::BlobHeap;
-pub use guid::{format_guid, Guid, GuidHeap};
+pub use guid::{Guid, GuidHeap, format_guid};
 pub use strings::StringsHeap;
 pub use us::UserStringsHeap;
-

@@ -67,7 +67,8 @@ impl TypeRefRow {
     pub fn write(&self, writer: &mut Writer, ctx: &TableContext) {
         let wide = ctx.wide_coded_index(CodedIndexKind::ResolutionScope);
         writer.write_index(
-            self.resolution_scope.encode(CodedIndexKind::ResolutionScope),
+            self.resolution_scope
+                .encode(CodedIndexKind::ResolutionScope),
             wide,
         );
         writer.write_index(self.type_name, ctx.wide_string_indices());
@@ -391,3 +392,617 @@ impl AssemblyRefRow {
     }
 }
 
+/// InterfaceImpl table row (0x09).
+#[derive(Debug, Clone, Default)]
+pub struct InterfaceImplRow {
+    /// TypeDef index of the class implementing the interface.
+    pub class: u32,
+    /// TypeDefOrRef coded index of the interface.
+    pub interface: CodedIndex,
+}
+
+impl InterfaceImplRow {
+    pub fn parse(reader: &mut Reader<'_>, ctx: &TableContext) -> Result<Self> {
+        use crate::tables::TableId;
+        Ok(Self {
+            class: reader.read_index(ctx.wide_table_index(TableId::TypeDef))?,
+            interface: CodedIndex::decode(
+                CodedIndexKind::TypeDefOrRef,
+                reader.read_index(ctx.wide_coded_index(CodedIndexKind::TypeDefOrRef))?,
+            ),
+        })
+    }
+
+    pub fn write(&self, writer: &mut Writer, ctx: &TableContext) {
+        use crate::tables::TableId;
+        writer.write_index(self.class, ctx.wide_table_index(TableId::TypeDef));
+        writer.write_index(
+            self.interface.encode(CodedIndexKind::TypeDefOrRef),
+            ctx.wide_coded_index(CodedIndexKind::TypeDefOrRef),
+        );
+    }
+}
+
+/// Constant table row (0x0B).
+#[derive(Debug, Clone, Default)]
+pub struct ConstantRow {
+    /// Element type (one of ELEMENT_TYPE_*).
+    pub constant_type: u8,
+    /// Padding byte.
+    pub padding: u8,
+    /// HasConstant coded index (Field, Param, or Property).
+    pub parent: CodedIndex,
+    /// Value index into #Blob.
+    pub value: u32,
+}
+
+impl ConstantRow {
+    pub fn parse(reader: &mut Reader<'_>, ctx: &TableContext) -> Result<Self> {
+        Ok(Self {
+            constant_type: reader.read_u8()?,
+            padding: reader.read_u8()?,
+            parent: CodedIndex::decode(
+                CodedIndexKind::HasConstant,
+                reader.read_index(ctx.wide_coded_index(CodedIndexKind::HasConstant))?,
+            ),
+            value: reader.read_index(ctx.wide_blob_indices())?,
+        })
+    }
+
+    pub fn write(&self, writer: &mut Writer, ctx: &TableContext) {
+        writer.write_u8(self.constant_type);
+        writer.write_u8(self.padding);
+        writer.write_index(
+            self.parent.encode(CodedIndexKind::HasConstant),
+            ctx.wide_coded_index(CodedIndexKind::HasConstant),
+        );
+        writer.write_index(self.value, ctx.wide_blob_indices());
+    }
+}
+
+/// FieldMarshal table row (0x0D).
+#[derive(Debug, Clone, Default)]
+pub struct FieldMarshalRow {
+    /// HasFieldMarshal coded index.
+    pub parent: CodedIndex,
+    /// Native type index into #Blob.
+    pub native_type: u32,
+}
+
+impl FieldMarshalRow {
+    pub fn parse(reader: &mut Reader<'_>, ctx: &TableContext) -> Result<Self> {
+        Ok(Self {
+            parent: CodedIndex::decode(
+                CodedIndexKind::HasFieldMarshal,
+                reader.read_index(ctx.wide_coded_index(CodedIndexKind::HasFieldMarshal))?,
+            ),
+            native_type: reader.read_index(ctx.wide_blob_indices())?,
+        })
+    }
+
+    pub fn write(&self, writer: &mut Writer, ctx: &TableContext) {
+        writer.write_index(
+            self.parent.encode(CodedIndexKind::HasFieldMarshal),
+            ctx.wide_coded_index(CodedIndexKind::HasFieldMarshal),
+        );
+        writer.write_index(self.native_type, ctx.wide_blob_indices());
+    }
+}
+
+/// DeclSecurity table row (0x0E).
+#[derive(Debug, Clone, Default)]
+pub struct DeclSecurityRow {
+    /// Security action.
+    pub action: u16,
+    /// HasDeclSecurity coded index.
+    pub parent: CodedIndex,
+    /// Permission set index into #Blob.
+    pub permission_set: u32,
+}
+
+impl DeclSecurityRow {
+    pub fn parse(reader: &mut Reader<'_>, ctx: &TableContext) -> Result<Self> {
+        Ok(Self {
+            action: reader.read_u16()?,
+            parent: CodedIndex::decode(
+                CodedIndexKind::HasDeclSecurity,
+                reader.read_index(ctx.wide_coded_index(CodedIndexKind::HasDeclSecurity))?,
+            ),
+            permission_set: reader.read_index(ctx.wide_blob_indices())?,
+        })
+    }
+
+    pub fn write(&self, writer: &mut Writer, ctx: &TableContext) {
+        writer.write_u16(self.action);
+        writer.write_index(
+            self.parent.encode(CodedIndexKind::HasDeclSecurity),
+            ctx.wide_coded_index(CodedIndexKind::HasDeclSecurity),
+        );
+        writer.write_index(self.permission_set, ctx.wide_blob_indices());
+    }
+}
+
+/// ClassLayout table row (0x0F).
+#[derive(Debug, Clone, Default)]
+pub struct ClassLayoutRow {
+    /// Packing size.
+    pub packing_size: u16,
+    /// Class size in bytes.
+    pub class_size: u32,
+    /// TypeDef index.
+    pub parent: u32,
+}
+
+impl ClassLayoutRow {
+    pub fn parse(reader: &mut Reader<'_>, ctx: &TableContext) -> Result<Self> {
+        use crate::tables::TableId;
+        Ok(Self {
+            packing_size: reader.read_u16()?,
+            class_size: reader.read_u32()?,
+            parent: reader.read_index(ctx.wide_table_index(TableId::TypeDef))?,
+        })
+    }
+
+    pub fn write(&self, writer: &mut Writer, ctx: &TableContext) {
+        use crate::tables::TableId;
+        writer.write_u16(self.packing_size);
+        writer.write_u32(self.class_size);
+        writer.write_index(self.parent, ctx.wide_table_index(TableId::TypeDef));
+    }
+}
+
+/// FieldLayout table row (0x10).
+#[derive(Debug, Clone, Default)]
+pub struct FieldLayoutRow {
+    /// Field offset.
+    pub offset: u32,
+    /// Field index.
+    pub field: u32,
+}
+
+impl FieldLayoutRow {
+    pub fn parse(reader: &mut Reader<'_>, ctx: &TableContext) -> Result<Self> {
+        use crate::tables::TableId;
+        Ok(Self {
+            offset: reader.read_u32()?,
+            field: reader.read_index(ctx.wide_table_index(TableId::Field))?,
+        })
+    }
+
+    pub fn write(&self, writer: &mut Writer, ctx: &TableContext) {
+        use crate::tables::TableId;
+        writer.write_u32(self.offset);
+        writer.write_index(self.field, ctx.wide_table_index(TableId::Field));
+    }
+}
+
+/// StandAloneSig table row (0x11).
+#[derive(Debug, Clone, Default)]
+pub struct StandAloneSigRow {
+    /// Signature index into #Blob.
+    pub signature: u32,
+}
+
+impl StandAloneSigRow {
+    pub fn parse(reader: &mut Reader<'_>, ctx: &TableContext) -> Result<Self> {
+        Ok(Self {
+            signature: reader.read_index(ctx.wide_blob_indices())?,
+        })
+    }
+
+    pub fn write(&self, writer: &mut Writer, ctx: &TableContext) {
+        writer.write_index(self.signature, ctx.wide_blob_indices());
+    }
+}
+
+/// EventMap table row (0x12).
+#[derive(Debug, Clone, Default)]
+pub struct EventMapRow {
+    /// TypeDef index.
+    pub parent: u32,
+    /// Event list start index.
+    pub event_list: u32,
+}
+
+impl EventMapRow {
+    pub fn parse(reader: &mut Reader<'_>, ctx: &TableContext) -> Result<Self> {
+        use crate::tables::TableId;
+        Ok(Self {
+            parent: reader.read_index(ctx.wide_table_index(TableId::TypeDef))?,
+            event_list: reader.read_index(ctx.wide_table_index(TableId::Event))?,
+        })
+    }
+
+    pub fn write(&self, writer: &mut Writer, ctx: &TableContext) {
+        use crate::tables::TableId;
+        writer.write_index(self.parent, ctx.wide_table_index(TableId::TypeDef));
+        writer.write_index(self.event_list, ctx.wide_table_index(TableId::Event));
+    }
+}
+
+/// Event table row (0x14).
+#[derive(Debug, Clone, Default)]
+pub struct EventRow {
+    /// Event flags.
+    pub event_flags: u16,
+    /// Event name index into #Strings.
+    pub name: u32,
+    /// TypeDefOrRef coded index for the event type.
+    pub event_type: CodedIndex,
+}
+
+impl EventRow {
+    pub fn parse(reader: &mut Reader<'_>, ctx: &TableContext) -> Result<Self> {
+        Ok(Self {
+            event_flags: reader.read_u16()?,
+            name: reader.read_index(ctx.wide_string_indices())?,
+            event_type: CodedIndex::decode(
+                CodedIndexKind::TypeDefOrRef,
+                reader.read_index(ctx.wide_coded_index(CodedIndexKind::TypeDefOrRef))?,
+            ),
+        })
+    }
+
+    pub fn write(&self, writer: &mut Writer, ctx: &TableContext) {
+        writer.write_u16(self.event_flags);
+        writer.write_index(self.name, ctx.wide_string_indices());
+        writer.write_index(
+            self.event_type.encode(CodedIndexKind::TypeDefOrRef),
+            ctx.wide_coded_index(CodedIndexKind::TypeDefOrRef),
+        );
+    }
+}
+
+/// PropertyMap table row (0x15).
+#[derive(Debug, Clone, Default)]
+pub struct PropertyMapRow {
+    /// TypeDef index.
+    pub parent: u32,
+    /// Property list start index.
+    pub property_list: u32,
+}
+
+impl PropertyMapRow {
+    pub fn parse(reader: &mut Reader<'_>, ctx: &TableContext) -> Result<Self> {
+        use crate::tables::TableId;
+        Ok(Self {
+            parent: reader.read_index(ctx.wide_table_index(TableId::TypeDef))?,
+            property_list: reader.read_index(ctx.wide_table_index(TableId::Property))?,
+        })
+    }
+
+    pub fn write(&self, writer: &mut Writer, ctx: &TableContext) {
+        use crate::tables::TableId;
+        writer.write_index(self.parent, ctx.wide_table_index(TableId::TypeDef));
+        writer.write_index(self.property_list, ctx.wide_table_index(TableId::Property));
+    }
+}
+
+/// Property table row (0x17).
+#[derive(Debug, Clone, Default)]
+pub struct PropertyRow {
+    /// Property flags.
+    pub flags: u16,
+    /// Property name index into #Strings.
+    pub name: u32,
+    /// Property signature index into #Blob.
+    pub property_type: u32,
+}
+
+impl PropertyRow {
+    pub fn parse(reader: &mut Reader<'_>, ctx: &TableContext) -> Result<Self> {
+        Ok(Self {
+            flags: reader.read_u16()?,
+            name: reader.read_index(ctx.wide_string_indices())?,
+            property_type: reader.read_index(ctx.wide_blob_indices())?,
+        })
+    }
+
+    pub fn write(&self, writer: &mut Writer, ctx: &TableContext) {
+        writer.write_u16(self.flags);
+        writer.write_index(self.name, ctx.wide_string_indices());
+        writer.write_index(self.property_type, ctx.wide_blob_indices());
+    }
+}
+
+/// MethodSemantics table row (0x18).
+#[derive(Debug, Clone, Default)]
+pub struct MethodSemanticsRow {
+    /// Semantics flags (setter, getter, other, addon, removeon, fire).
+    pub semantics: u16,
+    /// MethodDef index.
+    pub method: u32,
+    /// HasSemantics coded index (Event or Property).
+    pub association: CodedIndex,
+}
+
+impl MethodSemanticsRow {
+    pub fn parse(reader: &mut Reader<'_>, ctx: &TableContext) -> Result<Self> {
+        use crate::tables::TableId;
+        Ok(Self {
+            semantics: reader.read_u16()?,
+            method: reader.read_index(ctx.wide_table_index(TableId::MethodDef))?,
+            association: CodedIndex::decode(
+                CodedIndexKind::HasSemantics,
+                reader.read_index(ctx.wide_coded_index(CodedIndexKind::HasSemantics))?,
+            ),
+        })
+    }
+
+    pub fn write(&self, writer: &mut Writer, ctx: &TableContext) {
+        use crate::tables::TableId;
+        writer.write_u16(self.semantics);
+        writer.write_index(self.method, ctx.wide_table_index(TableId::MethodDef));
+        writer.write_index(
+            self.association.encode(CodedIndexKind::HasSemantics),
+            ctx.wide_coded_index(CodedIndexKind::HasSemantics),
+        );
+    }
+}
+
+/// MethodImpl table row (0x19).
+#[derive(Debug, Clone, Default)]
+pub struct MethodImplRow {
+    /// TypeDef index of the class.
+    pub class: u32,
+    /// MethodDefOrRef coded index of the implementation.
+    pub method_body: CodedIndex,
+    /// MethodDefOrRef coded index of the declaration.
+    pub method_declaration: CodedIndex,
+}
+
+impl MethodImplRow {
+    pub fn parse(reader: &mut Reader<'_>, ctx: &TableContext) -> Result<Self> {
+        use crate::tables::TableId;
+        Ok(Self {
+            class: reader.read_index(ctx.wide_table_index(TableId::TypeDef))?,
+            method_body: CodedIndex::decode(
+                CodedIndexKind::MethodDefOrRef,
+                reader.read_index(ctx.wide_coded_index(CodedIndexKind::MethodDefOrRef))?,
+            ),
+            method_declaration: CodedIndex::decode(
+                CodedIndexKind::MethodDefOrRef,
+                reader.read_index(ctx.wide_coded_index(CodedIndexKind::MethodDefOrRef))?,
+            ),
+        })
+    }
+
+    pub fn write(&self, writer: &mut Writer, ctx: &TableContext) {
+        use crate::tables::TableId;
+        writer.write_index(self.class, ctx.wide_table_index(TableId::TypeDef));
+        writer.write_index(
+            self.method_body.encode(CodedIndexKind::MethodDefOrRef),
+            ctx.wide_coded_index(CodedIndexKind::MethodDefOrRef),
+        );
+        writer.write_index(
+            self.method_declaration
+                .encode(CodedIndexKind::MethodDefOrRef),
+            ctx.wide_coded_index(CodedIndexKind::MethodDefOrRef),
+        );
+    }
+}
+
+/// ModuleRef table row (0x1A).
+#[derive(Debug, Clone, Default)]
+pub struct ModuleRefRow {
+    /// Module name index into #Strings.
+    pub name: u32,
+}
+
+impl ModuleRefRow {
+    pub fn parse(reader: &mut Reader<'_>, ctx: &TableContext) -> Result<Self> {
+        Ok(Self {
+            name: reader.read_index(ctx.wide_string_indices())?,
+        })
+    }
+
+    pub fn write(&self, writer: &mut Writer, ctx: &TableContext) {
+        writer.write_index(self.name, ctx.wide_string_indices());
+    }
+}
+
+/// TypeSpec table row (0x1B).
+#[derive(Debug, Clone, Default)]
+pub struct TypeSpecRow {
+    /// Signature index into #Blob.
+    pub signature: u32,
+}
+
+impl TypeSpecRow {
+    pub fn parse(reader: &mut Reader<'_>, ctx: &TableContext) -> Result<Self> {
+        Ok(Self {
+            signature: reader.read_index(ctx.wide_blob_indices())?,
+        })
+    }
+
+    pub fn write(&self, writer: &mut Writer, ctx: &TableContext) {
+        writer.write_index(self.signature, ctx.wide_blob_indices());
+    }
+}
+
+/// ImplMap table row (0x1C).
+#[derive(Debug, Clone, Default)]
+pub struct ImplMapRow {
+    /// Mapping flags.
+    pub mapping_flags: u16,
+    /// MemberForwarded coded index (Field or MethodDef).
+    pub member_forwarded: CodedIndex,
+    /// Import name index into #Strings.
+    pub import_name: u32,
+    /// ModuleRef index.
+    pub import_scope: u32,
+}
+
+impl ImplMapRow {
+    pub fn parse(reader: &mut Reader<'_>, ctx: &TableContext) -> Result<Self> {
+        use crate::tables::TableId;
+        Ok(Self {
+            mapping_flags: reader.read_u16()?,
+            member_forwarded: CodedIndex::decode(
+                CodedIndexKind::MemberForwarded,
+                reader.read_index(ctx.wide_coded_index(CodedIndexKind::MemberForwarded))?,
+            ),
+            import_name: reader.read_index(ctx.wide_string_indices())?,
+            import_scope: reader.read_index(ctx.wide_table_index(TableId::ModuleRef))?,
+        })
+    }
+
+    pub fn write(&self, writer: &mut Writer, ctx: &TableContext) {
+        use crate::tables::TableId;
+        writer.write_u16(self.mapping_flags);
+        writer.write_index(
+            self.member_forwarded
+                .encode(CodedIndexKind::MemberForwarded),
+            ctx.wide_coded_index(CodedIndexKind::MemberForwarded),
+        );
+        writer.write_index(self.import_name, ctx.wide_string_indices());
+        writer.write_index(self.import_scope, ctx.wide_table_index(TableId::ModuleRef));
+    }
+}
+
+/// FieldRva table row (0x1D).
+#[derive(Debug, Clone, Default)]
+pub struct FieldRvaRow {
+    /// RVA of field data.
+    pub rva: u32,
+    /// Field index.
+    pub field: u32,
+}
+
+impl FieldRvaRow {
+    pub fn parse(reader: &mut Reader<'_>, ctx: &TableContext) -> Result<Self> {
+        use crate::tables::TableId;
+        Ok(Self {
+            rva: reader.read_u32()?,
+            field: reader.read_index(ctx.wide_table_index(TableId::Field))?,
+        })
+    }
+
+    pub fn write(&self, writer: &mut Writer, ctx: &TableContext) {
+        use crate::tables::TableId;
+        writer.write_u32(self.rva);
+        writer.write_index(self.field, ctx.wide_table_index(TableId::Field));
+    }
+}
+
+/// NestedClass table row (0x29).
+#[derive(Debug, Clone, Default)]
+pub struct NestedClassRow {
+    /// TypeDef index of the nested class.
+    pub nested_class: u32,
+    /// TypeDef index of the enclosing class.
+    pub enclosing_class: u32,
+}
+
+impl NestedClassRow {
+    pub fn parse(reader: &mut Reader<'_>, ctx: &TableContext) -> Result<Self> {
+        use crate::tables::TableId;
+        Ok(Self {
+            nested_class: reader.read_index(ctx.wide_table_index(TableId::TypeDef))?,
+            enclosing_class: reader.read_index(ctx.wide_table_index(TableId::TypeDef))?,
+        })
+    }
+
+    pub fn write(&self, writer: &mut Writer, ctx: &TableContext) {
+        use crate::tables::TableId;
+        writer.write_index(self.nested_class, ctx.wide_table_index(TableId::TypeDef));
+        writer.write_index(self.enclosing_class, ctx.wide_table_index(TableId::TypeDef));
+    }
+}
+
+/// GenericParam table row (0x2A).
+#[derive(Debug, Clone, Default)]
+pub struct GenericParamRow {
+    /// Generic parameter index (0-based within the owner's list).
+    pub number: u16,
+    /// Generic parameter flags.
+    pub flags: u16,
+    /// TypeOrMethodDef coded index (owner of this generic param).
+    pub owner: CodedIndex,
+    /// Parameter name index into #Strings.
+    pub name: u32,
+}
+
+impl GenericParamRow {
+    pub fn parse(reader: &mut Reader<'_>, ctx: &TableContext) -> Result<Self> {
+        Ok(Self {
+            number: reader.read_u16()?,
+            flags: reader.read_u16()?,
+            owner: CodedIndex::decode(
+                CodedIndexKind::TypeOrMethodDef,
+                reader.read_index(ctx.wide_coded_index(CodedIndexKind::TypeOrMethodDef))?,
+            ),
+            name: reader.read_index(ctx.wide_string_indices())?,
+        })
+    }
+
+    pub fn write(&self, writer: &mut Writer, ctx: &TableContext) {
+        writer.write_u16(self.number);
+        writer.write_u16(self.flags);
+        writer.write_index(
+            self.owner.encode(CodedIndexKind::TypeOrMethodDef),
+            ctx.wide_coded_index(CodedIndexKind::TypeOrMethodDef),
+        );
+        writer.write_index(self.name, ctx.wide_string_indices());
+    }
+}
+
+/// MethodSpec table row (0x2B).
+#[derive(Debug, Clone, Default)]
+pub struct MethodSpecRow {
+    /// MethodDefOrRef coded index.
+    pub method: CodedIndex,
+    /// Instantiation signature index into #Blob.
+    pub instantiation: u32,
+}
+
+impl MethodSpecRow {
+    pub fn parse(reader: &mut Reader<'_>, ctx: &TableContext) -> Result<Self> {
+        Ok(Self {
+            method: CodedIndex::decode(
+                CodedIndexKind::MethodDefOrRef,
+                reader.read_index(ctx.wide_coded_index(CodedIndexKind::MethodDefOrRef))?,
+            ),
+            instantiation: reader.read_index(ctx.wide_blob_indices())?,
+        })
+    }
+
+    pub fn write(&self, writer: &mut Writer, ctx: &TableContext) {
+        writer.write_index(
+            self.method.encode(CodedIndexKind::MethodDefOrRef),
+            ctx.wide_coded_index(CodedIndexKind::MethodDefOrRef),
+        );
+        writer.write_index(self.instantiation, ctx.wide_blob_indices());
+    }
+}
+
+/// GenericParamConstraint table row (0x2C).
+#[derive(Debug, Clone, Default)]
+pub struct GenericParamConstraintRow {
+    /// GenericParam index.
+    pub owner: u32,
+    /// TypeDefOrRef coded index (the constraint type).
+    pub constraint: CodedIndex,
+}
+
+impl GenericParamConstraintRow {
+    pub fn parse(reader: &mut Reader<'_>, ctx: &TableContext) -> Result<Self> {
+        use crate::tables::TableId;
+        Ok(Self {
+            owner: reader.read_index(ctx.wide_table_index(TableId::GenericParam))?,
+            constraint: CodedIndex::decode(
+                CodedIndexKind::TypeDefOrRef,
+                reader.read_index(ctx.wide_coded_index(CodedIndexKind::TypeDefOrRef))?,
+            ),
+        })
+    }
+
+    pub fn write(&self, writer: &mut Writer, ctx: &TableContext) {
+        use crate::tables::TableId;
+        writer.write_index(self.owner, ctx.wide_table_index(TableId::GenericParam));
+        writer.write_index(
+            self.constraint.encode(CodedIndexKind::TypeDefOrRef),
+            ctx.wide_coded_index(CodedIndexKind::TypeDefOrRef),
+        );
+    }
+}

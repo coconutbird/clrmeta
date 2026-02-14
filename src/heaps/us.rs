@@ -126,3 +126,60 @@ impl UserStringsHeap {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_new_heap_starts_with_null() {
+        let heap = UserStringsHeap::new();
+        assert_eq!(heap.size(), 1);
+        assert_eq!(heap.data()[0], 0);
+    }
+
+    #[test]
+    fn test_add_and_get_string() {
+        let mut heap = UserStringsHeap::new();
+        let offset = heap.add("Hello");
+        assert_eq!(heap.get(offset).unwrap(), "Hello");
+    }
+
+    #[test]
+    fn test_empty_string() {
+        let mut heap = UserStringsHeap::new();
+        let offset = heap.add("");
+        assert_eq!(heap.get(offset).unwrap(), "");
+    }
+
+    #[test]
+    fn test_unicode_string() {
+        let mut heap = UserStringsHeap::new();
+        let offset = heap.add("日本語");
+        assert_eq!(heap.get(offset).unwrap(), "日本語");
+    }
+
+    #[test]
+    fn test_parse_heap() {
+        // Manually construct: null byte + "Hi" in UTF-16LE with length prefix
+        // "Hi" = 0x0048, 0x0069 in UTF-16
+        // Length = 4 bytes (2 chars * 2) + 1 (flag) = 5
+        let data = [
+            0x00, // null byte at start
+            0x05, // compressed length = 5
+            0x48, 0x00, // 'H'
+            0x69, 0x00, // 'i'
+            0x00, // flag byte (no special chars)
+        ];
+        let heap = UserStringsHeap::parse(&data);
+        assert_eq!(heap.get(1).unwrap(), "Hi");
+    }
+
+    #[test]
+    fn test_write_heap() {
+        let mut heap = UserStringsHeap::new();
+        heap.add("A");
+        let data = heap.write();
+        // null byte + length (3) + 'A' UTF-16LE (0x41, 0x00) + flag (0)
+        assert_eq!(data, vec![0x00, 0x03, 0x41, 0x00, 0x00]);
+    }
+}
