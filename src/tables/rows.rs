@@ -1162,3 +1162,222 @@ impl GenericParamConstraintRow {
         );
     }
 }
+
+// ============================================================================
+// Previously skipped tables (rarely used but part of ECMA-335)
+// ============================================================================
+
+/// AssemblyProcessor table row (0x21) - deprecated, rarely used.
+#[derive(Debug, Clone, Default)]
+pub struct AssemblyProcessorRow {
+    /// Processor ID.
+    pub processor: u32,
+}
+
+impl AssemblyProcessorRow {
+    pub fn parse(reader: &mut Reader<'_>, _ctx: &TableContext) -> Result<Self> {
+        Ok(Self {
+            processor: reader.read_u32()?,
+        })
+    }
+
+    pub fn write(&self, writer: &mut Writer, _ctx: &TableContext) {
+        writer.write_u32(self.processor);
+    }
+}
+
+/// AssemblyOs table row (0x22) - deprecated, rarely used.
+#[derive(Debug, Clone, Default)]
+pub struct AssemblyOsRow {
+    /// OS platform ID.
+    pub os_platform_id: u32,
+    /// OS major version.
+    pub os_major_version: u32,
+    /// OS minor version.
+    pub os_minor_version: u32,
+}
+
+impl AssemblyOsRow {
+    pub fn parse(reader: &mut Reader<'_>, _ctx: &TableContext) -> Result<Self> {
+        Ok(Self {
+            os_platform_id: reader.read_u32()?,
+            os_major_version: reader.read_u32()?,
+            os_minor_version: reader.read_u32()?,
+        })
+    }
+
+    pub fn write(&self, writer: &mut Writer, _ctx: &TableContext) {
+        writer.write_u32(self.os_platform_id);
+        writer.write_u32(self.os_major_version);
+        writer.write_u32(self.os_minor_version);
+    }
+}
+
+/// AssemblyRefProcessor table row (0x24) - deprecated, rarely used.
+#[derive(Debug, Clone, Default)]
+pub struct AssemblyRefProcessorRow {
+    /// Processor ID.
+    pub processor: u32,
+    /// AssemblyRef index.
+    pub assembly_ref: u32,
+}
+
+impl AssemblyRefProcessorRow {
+    pub fn parse(reader: &mut Reader<'_>, ctx: &TableContext) -> Result<Self> {
+        use crate::tables::TableId;
+        Ok(Self {
+            processor: reader.read_u32()?,
+            assembly_ref: reader.read_index(ctx.wide_table_index(TableId::AssemblyRef))?,
+        })
+    }
+
+    pub fn write(&self, writer: &mut Writer, ctx: &TableContext) {
+        use crate::tables::TableId;
+        writer.write_u32(self.processor);
+        writer.write_index(
+            self.assembly_ref,
+            ctx.wide_table_index(TableId::AssemblyRef),
+        );
+    }
+}
+
+/// AssemblyRefOs table row (0x25) - deprecated, rarely used.
+#[derive(Debug, Clone, Default)]
+pub struct AssemblyRefOsRow {
+    /// OS platform ID.
+    pub os_platform_id: u32,
+    /// OS major version.
+    pub os_major_version: u32,
+    /// OS minor version.
+    pub os_minor_version: u32,
+    /// AssemblyRef index.
+    pub assembly_ref: u32,
+}
+
+impl AssemblyRefOsRow {
+    pub fn parse(reader: &mut Reader<'_>, ctx: &TableContext) -> Result<Self> {
+        use crate::tables::TableId;
+        Ok(Self {
+            os_platform_id: reader.read_u32()?,
+            os_major_version: reader.read_u32()?,
+            os_minor_version: reader.read_u32()?,
+            assembly_ref: reader.read_index(ctx.wide_table_index(TableId::AssemblyRef))?,
+        })
+    }
+
+    pub fn write(&self, writer: &mut Writer, ctx: &TableContext) {
+        use crate::tables::TableId;
+        writer.write_u32(self.os_platform_id);
+        writer.write_u32(self.os_major_version);
+        writer.write_u32(self.os_minor_version);
+        writer.write_index(
+            self.assembly_ref,
+            ctx.wide_table_index(TableId::AssemblyRef),
+        );
+    }
+}
+
+/// File table row (0x26) - external file references in multi-file assemblies.
+#[derive(Debug, Clone, Default)]
+pub struct FileRow {
+    /// File flags.
+    pub flags: u32,
+    /// File name index into #Strings.
+    pub name: u32,
+    /// Hash value index into #Blob.
+    pub hash_value: u32,
+}
+
+impl FileRow {
+    pub fn parse(reader: &mut Reader<'_>, ctx: &TableContext) -> Result<Self> {
+        Ok(Self {
+            flags: reader.read_u32()?,
+            name: reader.read_index(ctx.wide_string_indices())?,
+            hash_value: reader.read_index(ctx.wide_blob_indices())?,
+        })
+    }
+
+    pub fn write(&self, writer: &mut Writer, ctx: &TableContext) {
+        writer.write_u32(self.flags);
+        writer.write_index(self.name, ctx.wide_string_indices());
+        writer.write_index(self.hash_value, ctx.wide_blob_indices());
+    }
+}
+
+/// ExportedType table row (0x27) - type forwarders and multi-file assembly exports.
+#[derive(Debug, Clone, Default)]
+pub struct ExportedTypeRow {
+    /// Type attributes flags.
+    pub flags: u32,
+    /// TypeDef token hint (can be 0).
+    pub type_def_id: u32,
+    /// Type name index into #Strings.
+    pub type_name: u32,
+    /// Type namespace index into #Strings.
+    pub type_namespace: u32,
+    /// Implementation coded index (File, ExportedType, or AssemblyRef for forwarders).
+    pub implementation: CodedIndex,
+}
+
+impl ExportedTypeRow {
+    pub fn parse(reader: &mut Reader<'_>, ctx: &TableContext) -> Result<Self> {
+        Ok(Self {
+            flags: reader.read_u32()?,
+            type_def_id: reader.read_u32()?,
+            type_name: reader.read_index(ctx.wide_string_indices())?,
+            type_namespace: reader.read_index(ctx.wide_string_indices())?,
+            implementation: CodedIndex::decode(
+                CodedIndexKind::Implementation,
+                reader.read_index(ctx.wide_coded_index(CodedIndexKind::Implementation))?,
+            ),
+        })
+    }
+
+    pub fn write(&self, writer: &mut Writer, ctx: &TableContext) {
+        writer.write_u32(self.flags);
+        writer.write_u32(self.type_def_id);
+        writer.write_index(self.type_name, ctx.wide_string_indices());
+        writer.write_index(self.type_namespace, ctx.wide_string_indices());
+        writer.write_index(
+            self.implementation.encode(CodedIndexKind::Implementation),
+            ctx.wide_coded_index(CodedIndexKind::Implementation),
+        );
+    }
+}
+
+/// ManifestResource table row (0x28) - embedded or linked resources.
+#[derive(Debug, Clone, Default)]
+pub struct ManifestResourceRow {
+    /// Offset in the resource data (if embedded).
+    pub offset: u32,
+    /// Resource flags.
+    pub flags: u32,
+    /// Resource name index into #Strings.
+    pub name: u32,
+    /// Implementation coded index (File or AssemblyRef, null if embedded).
+    pub implementation: CodedIndex,
+}
+
+impl ManifestResourceRow {
+    pub fn parse(reader: &mut Reader<'_>, ctx: &TableContext) -> Result<Self> {
+        Ok(Self {
+            offset: reader.read_u32()?,
+            flags: reader.read_u32()?,
+            name: reader.read_index(ctx.wide_string_indices())?,
+            implementation: CodedIndex::decode(
+                CodedIndexKind::Implementation,
+                reader.read_index(ctx.wide_coded_index(CodedIndexKind::Implementation))?,
+            ),
+        })
+    }
+
+    pub fn write(&self, writer: &mut Writer, ctx: &TableContext) {
+        writer.write_u32(self.offset);
+        writer.write_u32(self.flags);
+        writer.write_index(self.name, ctx.wide_string_indices());
+        writer.write_index(
+            self.implementation.encode(CodedIndexKind::Implementation),
+            ctx.wide_coded_index(CodedIndexKind::Implementation),
+        );
+    }
+}

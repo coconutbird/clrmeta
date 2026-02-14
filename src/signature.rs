@@ -527,3 +527,374 @@ impl LocalVarSig {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // ========================================================================
+    // TypeSig tests
+    // ========================================================================
+
+    #[test]
+    fn test_type_sig_primitives() {
+        // void
+        let sig = TypeSig::parse(&mut Reader::new(&[0x01])).unwrap();
+        assert_eq!(sig, TypeSig::Primitive(ElementType::Void));
+
+        // bool
+        let sig = TypeSig::parse(&mut Reader::new(&[0x02])).unwrap();
+        assert_eq!(sig, TypeSig::Primitive(ElementType::Boolean));
+
+        // int32
+        let sig = TypeSig::parse(&mut Reader::new(&[0x08])).unwrap();
+        assert_eq!(sig, TypeSig::Primitive(ElementType::I4));
+
+        // string
+        let sig = TypeSig::parse(&mut Reader::new(&[0x0E])).unwrap();
+        assert_eq!(sig, TypeSig::Primitive(ElementType::String));
+
+        // object
+        let sig = TypeSig::parse(&mut Reader::new(&[0x1C])).unwrap();
+        assert_eq!(sig, TypeSig::Primitive(ElementType::Object));
+    }
+
+    #[test]
+    fn test_type_sig_class() {
+        // CLASS followed by TypeDefOrRef coded index (compressed uint)
+        // 0x12 = CLASS, 0x05 = TypeDefOrRef token 5
+        let sig = TypeSig::parse(&mut Reader::new(&[0x12, 0x05])).unwrap();
+        assert_eq!(sig, TypeSig::Class(5));
+    }
+
+    #[test]
+    fn test_type_sig_valuetype() {
+        // VALUETYPE followed by TypeDefOrRef coded index
+        // 0x11 = VALUETYPE, 0x09 = token 9
+        let sig = TypeSig::parse(&mut Reader::new(&[0x11, 0x09])).unwrap();
+        assert_eq!(sig, TypeSig::ValueType(9));
+    }
+
+    #[test]
+    fn test_type_sig_szarray() {
+        // SzArray of int32: 0x1D 0x08
+        let sig = TypeSig::parse(&mut Reader::new(&[0x1D, 0x08])).unwrap();
+        assert_eq!(
+            sig,
+            TypeSig::SzArray(Box::new(TypeSig::Primitive(ElementType::I4)))
+        );
+    }
+
+    #[test]
+    fn test_type_sig_ptr() {
+        // Ptr to int32: 0x0F 0x08
+        let sig = TypeSig::parse(&mut Reader::new(&[0x0F, 0x08])).unwrap();
+        assert_eq!(
+            sig,
+            TypeSig::Ptr(Box::new(TypeSig::Primitive(ElementType::I4)))
+        );
+    }
+
+    #[test]
+    fn test_type_sig_byref() {
+        // ByRef int32: 0x10 0x08
+        let sig = TypeSig::parse(&mut Reader::new(&[0x10, 0x08])).unwrap();
+        assert_eq!(
+            sig,
+            TypeSig::ByRef(Box::new(TypeSig::Primitive(ElementType::I4)))
+        );
+    }
+
+    #[test]
+    fn test_type_sig_var() {
+        // Generic type parameter T0: 0x13 0x00
+        let sig = TypeSig::parse(&mut Reader::new(&[0x13, 0x00])).unwrap();
+        assert_eq!(sig, TypeSig::Var(0));
+
+        // Generic type parameter T2: 0x13 0x02
+        let sig = TypeSig::parse(&mut Reader::new(&[0x13, 0x02])).unwrap();
+        assert_eq!(sig, TypeSig::Var(2));
+    }
+
+    #[test]
+    fn test_type_sig_mvar() {
+        // Generic method parameter M0: 0x1E 0x00
+        let sig = TypeSig::parse(&mut Reader::new(&[0x1E, 0x00])).unwrap();
+        assert_eq!(sig, TypeSig::MVar(0));
+    }
+
+    #[test]
+    fn test_type_sig_generic_inst() {
+        // GenericInst: List<int>
+        // 0x15 = GENERICINST
+        // 0x12 = CLASS
+        // 0x05 = TypeRef token
+        // 0x01 = 1 type argument
+        // 0x08 = int32
+        let sig = TypeSig::parse(&mut Reader::new(&[0x15, 0x12, 0x05, 0x01, 0x08])).unwrap();
+        assert_eq!(
+            sig,
+            TypeSig::GenericInst {
+                is_value_type: false,
+                type_ref: 5,
+                type_args: vec![TypeSig::Primitive(ElementType::I4)]
+            }
+        );
+    }
+
+    #[test]
+    fn test_type_sig_pinned() {
+        // Pinned int32: 0x45 0x08
+        let sig = TypeSig::parse(&mut Reader::new(&[0x45, 0x08])).unwrap();
+        assert_eq!(
+            sig,
+            TypeSig::Pinned(Box::new(TypeSig::Primitive(ElementType::I4)))
+        );
+    }
+
+    // ========================================================================
+    // MethodSig tests
+    // ========================================================================
+
+    #[test]
+    fn test_method_sig_void_no_params() {
+        // DEFAULT calling convention, 0 params, returns void
+        // 0x00 = DEFAULT
+        // 0x00 = 0 params
+        // 0x01 = void return
+        let sig = MethodSig::parse_blob(&[0x00, 0x00, 0x01]).unwrap();
+        assert_eq!(sig.calling_convention, CallingConvention(0x00));
+        assert_eq!(sig.generic_param_count, 0);
+        assert_eq!(sig.return_type, TypeSig::Primitive(ElementType::Void));
+        assert!(sig.params.is_empty());
+        assert!(sig.sentinel.is_none());
+    }
+
+    #[test]
+    fn test_method_sig_with_params() {
+        // Instance method: int Foo(string, bool)
+        // 0x20 = HASTHIS
+        // 0x02 = 2 params
+        // 0x08 = int32 return
+        // 0x0E = string param
+        // 0x02 = bool param
+        let sig = MethodSig::parse_blob(&[0x20, 0x02, 0x08, 0x0E, 0x02]).unwrap();
+        assert!(sig.calling_convention.has_this());
+        assert_eq!(sig.params.len(), 2);
+        assert_eq!(sig.return_type, TypeSig::Primitive(ElementType::I4));
+        assert_eq!(sig.params[0], TypeSig::Primitive(ElementType::String));
+        assert_eq!(sig.params[1], TypeSig::Primitive(ElementType::Boolean));
+    }
+
+    #[test]
+    fn test_method_sig_generic() {
+        // Generic method: void Foo<T>(T)
+        // 0x10 = GENERIC
+        // 0x01 = 1 generic param
+        // 0x01 = 1 param
+        // 0x01 = void return
+        // 0x13 0x00 = T (Var 0)
+        let sig = MethodSig::parse_blob(&[0x10, 0x01, 0x01, 0x01, 0x13, 0x00]).unwrap();
+        assert!(sig.calling_convention.is_generic());
+        assert_eq!(sig.generic_param_count, 1);
+        assert_eq!(sig.return_type, TypeSig::Primitive(ElementType::Void));
+        assert_eq!(sig.params[0], TypeSig::Var(0));
+    }
+
+    // ========================================================================
+    // FieldSig tests
+    // ========================================================================
+
+    #[test]
+    fn test_field_sig_int() {
+        // Field of type int32
+        // 0x06 = FIELD
+        // 0x08 = int32
+        let sig = FieldSig::parse_blob(&[0x06, 0x08]).unwrap();
+        assert_eq!(sig.field_type, TypeSig::Primitive(ElementType::I4));
+    }
+
+    #[test]
+    fn test_field_sig_string() {
+        // Field of type string
+        // 0x06 = FIELD
+        // 0x0E = string
+        let sig = FieldSig::parse_blob(&[0x06, 0x0E]).unwrap();
+        assert_eq!(sig.field_type, TypeSig::Primitive(ElementType::String));
+    }
+
+    #[test]
+    fn test_field_sig_array() {
+        // Field of type int[]
+        // 0x06 = FIELD
+        // 0x1D = SzArray
+        // 0x08 = int32
+        let sig = FieldSig::parse_blob(&[0x06, 0x1D, 0x08]).unwrap();
+        assert_eq!(
+            sig.field_type,
+            TypeSig::SzArray(Box::new(TypeSig::Primitive(ElementType::I4)))
+        );
+    }
+
+    #[test]
+    fn test_field_sig_invalid() {
+        // Not a field signature (wrong calling convention)
+        let result = FieldSig::parse_blob(&[0x00, 0x08]);
+        assert!(result.is_err());
+    }
+
+    // ========================================================================
+    // PropertySig tests
+    // ========================================================================
+
+    #[test]
+    fn test_property_sig_simple() {
+        // Property of type int32, no params
+        // 0x08 = PROPERTY
+        // 0x00 = 0 params
+        // 0x08 = int32
+        let sig = PropertySig::parse_blob(&[0x08, 0x00, 0x08]).unwrap();
+        assert!(!sig.has_this);
+        assert_eq!(sig.property_type, TypeSig::Primitive(ElementType::I4));
+        assert!(sig.params.is_empty());
+    }
+
+    #[test]
+    fn test_property_sig_instance() {
+        // Instance property of type string
+        // 0x28 = PROPERTY | HASTHIS
+        // 0x00 = 0 params
+        // 0x0E = string
+        let sig = PropertySig::parse_blob(&[0x28, 0x00, 0x0E]).unwrap();
+        assert!(sig.has_this);
+        assert_eq!(sig.property_type, TypeSig::Primitive(ElementType::String));
+    }
+
+    #[test]
+    fn test_property_sig_indexed() {
+        // Indexed property: string this[int]
+        // 0x28 = PROPERTY | HASTHIS
+        // 0x01 = 1 param
+        // 0x0E = string
+        // 0x08 = int32 index
+        let sig = PropertySig::parse_blob(&[0x28, 0x01, 0x0E, 0x08]).unwrap();
+        assert!(sig.has_this);
+        assert_eq!(sig.property_type, TypeSig::Primitive(ElementType::String));
+        assert_eq!(sig.params.len(), 1);
+        assert_eq!(sig.params[0], TypeSig::Primitive(ElementType::I4));
+    }
+
+    #[test]
+    fn test_property_sig_invalid() {
+        // Not a property signature
+        let result = PropertySig::parse_blob(&[0x00, 0x00, 0x08]);
+        assert!(result.is_err());
+    }
+
+    // ========================================================================
+    // LocalVarSig tests
+    // ========================================================================
+
+    #[test]
+    fn test_local_var_sig_empty() {
+        // No local variables
+        // 0x07 = LOCAL_SIG
+        // 0x00 = 0 locals
+        let sig = LocalVarSig::parse_blob(&[0x07, 0x00]).unwrap();
+        assert!(sig.locals.is_empty());
+    }
+
+    #[test]
+    fn test_local_var_sig_single() {
+        // One local variable of type int32
+        // 0x07 = LOCAL_SIG
+        // 0x01 = 1 local
+        // 0x08 = int32
+        let sig = LocalVarSig::parse_blob(&[0x07, 0x01, 0x08]).unwrap();
+        assert_eq!(sig.locals.len(), 1);
+        assert_eq!(sig.locals[0], TypeSig::Primitive(ElementType::I4));
+    }
+
+    #[test]
+    fn test_local_var_sig_multiple() {
+        // Three locals: int32, string, bool
+        // 0x07 = LOCAL_SIG
+        // 0x03 = 3 locals
+        // 0x08 = int32
+        // 0x0E = string
+        // 0x02 = bool
+        let sig = LocalVarSig::parse_blob(&[0x07, 0x03, 0x08, 0x0E, 0x02]).unwrap();
+        assert_eq!(sig.locals.len(), 3);
+        assert_eq!(sig.locals[0], TypeSig::Primitive(ElementType::I4));
+        assert_eq!(sig.locals[1], TypeSig::Primitive(ElementType::String));
+        assert_eq!(sig.locals[2], TypeSig::Primitive(ElementType::Boolean));
+    }
+
+    #[test]
+    fn test_local_var_sig_pinned() {
+        // Pinned local: pinned int32
+        // 0x07 = LOCAL_SIG
+        // 0x01 = 1 local
+        // 0x45 = PINNED
+        // 0x08 = int32
+        let sig = LocalVarSig::parse_blob(&[0x07, 0x01, 0x45, 0x08]).unwrap();
+        assert_eq!(sig.locals.len(), 1);
+        assert_eq!(
+            sig.locals[0],
+            TypeSig::Pinned(Box::new(TypeSig::Primitive(ElementType::I4)))
+        );
+    }
+
+    #[test]
+    fn test_local_var_sig_invalid() {
+        // Not a local sig (wrong calling convention)
+        let result = LocalVarSig::parse_blob(&[0x00, 0x01, 0x08]);
+        assert!(result.is_err());
+    }
+
+    // ========================================================================
+    // CallingConvention tests
+    // ========================================================================
+
+    #[test]
+    fn test_calling_convention_flags() {
+        let cc = CallingConvention(0x00);
+        assert!(cc.is_method());
+        assert!(!cc.is_field());
+        assert!(!cc.has_this());
+        assert!(!cc.is_generic());
+
+        let cc = CallingConvention(0x20); // HASTHIS
+        assert!(cc.has_this());
+
+        let cc = CallingConvention(0x10); // GENERIC
+        assert!(cc.is_generic());
+
+        let cc = CallingConvention(0x06); // FIELD
+        assert!(cc.is_field());
+
+        let cc = CallingConvention(0x08); // PROPERTY
+        assert!(cc.is_property());
+    }
+
+    // ========================================================================
+    // ElementType tests
+    // ========================================================================
+
+    #[test]
+    fn test_element_type_from_u8() {
+        assert_eq!(ElementType::from_u8(0x01), Some(ElementType::Void));
+        assert_eq!(ElementType::from_u8(0x08), Some(ElementType::I4));
+        assert_eq!(ElementType::from_u8(0x0E), Some(ElementType::String));
+        assert_eq!(ElementType::from_u8(0x1C), Some(ElementType::Object));
+        assert_eq!(ElementType::from_u8(0xFF), None); // Invalid
+    }
+
+    #[test]
+    fn test_element_type_name() {
+        assert_eq!(ElementType::Void.name(), "void");
+        assert_eq!(ElementType::I4.name(), "int");
+        assert_eq!(ElementType::String.name(), "string");
+        assert_eq!(ElementType::Object.name(), "object");
+        assert_eq!(ElementType::SzArray.name(), "[]");
+    }
+}

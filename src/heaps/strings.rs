@@ -1,5 +1,7 @@
 //! #Strings heap - null-terminated UTF-8 strings.
 
+use std::collections::HashMap;
+
 use crate::error::{Error, Result};
 use crate::writer::Writer;
 
@@ -8,8 +10,8 @@ use crate::writer::Writer;
 pub struct StringsHeap {
     /// Raw heap data.
     data: Vec<u8>,
-    /// String index to offset mapping for deduplication during writes.
-    index_map: Vec<(String, u32)>,
+    /// String to offset mapping for O(1) deduplication during writes.
+    index_map: HashMap<String, u32>,
 }
 
 impl StringsHeap {
@@ -17,9 +19,11 @@ impl StringsHeap {
     #[must_use]
     pub fn new() -> Self {
         // Heap always starts with a null byte (empty string at index 0)
+        let mut index_map = HashMap::new();
+        index_map.insert(String::new(), 0);
         Self {
             data: vec![0],
-            index_map: vec![(String::new(), 0)],
+            index_map,
         }
     }
 
@@ -28,7 +32,7 @@ impl StringsHeap {
     pub fn parse(data: &[u8]) -> Self {
         Self {
             data: data.to_vec(),
-            index_map: Vec::new(), // Populated lazily or on demand
+            index_map: HashMap::new(), // Populated lazily or on demand
         }
     }
 
@@ -50,18 +54,18 @@ impl StringsHeap {
     }
 
     /// Add a string to the heap and return its offset.
-    /// Deduplicates strings that already exist.
+    /// Deduplicates strings that already exist in O(1) time.
     pub fn add(&mut self, s: &str) -> u32 {
-        // Check if string already exists
-        if let Some((_, offset)) = self.index_map.iter().find(|(existing, _)| existing == s) {
-            return *offset;
+        // Check if string already exists (O(1) lookup)
+        if let Some(&offset) = self.index_map.get(s) {
+            return offset;
         }
 
         // Add new string
         let offset = self.data.len() as u32;
         self.data.extend_from_slice(s.as_bytes());
         self.data.push(0); // Null terminator
-        self.index_map.push((s.to_string(), offset));
+        self.index_map.insert(s.to_string(), offset);
         offset
     }
 

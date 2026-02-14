@@ -6,13 +6,14 @@ use crate::reader::Reader;
 use crate::root::MetadataRoot;
 use crate::stream::StreamHeader;
 use crate::tables::{
-    AssemblyRefRow, AssemblyRow, ClassLayoutRow, ConstantRow, CustomAttributeRow, DeclSecurityRow,
-    EncLogRow, EncMapRow, EventMapRow, EventPtrRow, EventRow, FieldLayoutRow, FieldMarshalRow,
-    FieldPtrRow, FieldRow, FieldRvaRow, GenericParamConstraintRow, GenericParamRow, ImplMapRow,
-    InterfaceImplRow, MemberRefRow, MethodDefRow, MethodImplRow, MethodPtrRow, MethodSemanticsRow,
-    MethodSpecRow, ModuleRefRow, ModuleRow, NestedClassRow, ParamPtrRow, ParamRow, PropertyMapRow,
-    PropertyPtrRow, PropertyRow, StandAloneSigRow, TableContext, TableId, TablesHeader, TypeDefRow,
-    TypeRefRow, TypeSpecRow,
+    AssemblyOsRow, AssemblyProcessorRow, AssemblyRefOsRow, AssemblyRefProcessorRow, AssemblyRefRow,
+    AssemblyRow, ClassLayoutRow, ConstantRow, CustomAttributeRow, DeclSecurityRow, EncLogRow,
+    EncMapRow, EventMapRow, EventPtrRow, EventRow, ExportedTypeRow, FieldLayoutRow,
+    FieldMarshalRow, FieldPtrRow, FieldRow, FieldRvaRow, FileRow, GenericParamConstraintRow,
+    GenericParamRow, ImplMapRow, InterfaceImplRow, ManifestResourceRow, MemberRefRow, MethodDefRow,
+    MethodImplRow, MethodPtrRow, MethodSemanticsRow, MethodSpecRow, ModuleRefRow, ModuleRow,
+    NestedClassRow, ParamPtrRow, ParamRow, PropertyMapRow, PropertyPtrRow, PropertyRow,
+    StandAloneSigRow, TableContext, TableId, TablesHeader, TypeDefRow, TypeRefRow, TypeSpecRow,
 };
 use crate::writer::Writer;
 
@@ -99,8 +100,22 @@ pub struct Metadata {
     pub enc_maps: Vec<EncMapRow>,
     /// Assembly table rows (0x20, usually 0 or 1).
     pub assemblies: Vec<AssemblyRow>,
+    /// AssemblyProcessor table rows (0x21) - deprecated.
+    pub assembly_processors: Vec<AssemblyProcessorRow>,
+    /// AssemblyOs table rows (0x22) - deprecated.
+    pub assembly_oses: Vec<AssemblyOsRow>,
     /// AssemblyRef table rows (0x23).
     pub assembly_refs: Vec<AssemblyRefRow>,
+    /// AssemblyRefProcessor table rows (0x24) - deprecated.
+    pub assembly_ref_processors: Vec<AssemblyRefProcessorRow>,
+    /// AssemblyRefOs table rows (0x25) - deprecated.
+    pub assembly_ref_oses: Vec<AssemblyRefOsRow>,
+    /// File table rows (0x26) - multi-file assemblies.
+    pub files: Vec<FileRow>,
+    /// ExportedType table rows (0x27) - type forwarders.
+    pub exported_types: Vec<ExportedTypeRow>,
+    /// ManifestResource table rows (0x28).
+    pub manifest_resources: Vec<ManifestResourceRow>,
     /// NestedClass table rows (0x29).
     pub nested_classes: Vec<NestedClassRow>,
     /// GenericParam table rows (0x2A).
@@ -232,8 +247,12 @@ impl Metadata {
             PropertyMapRow::parse,
         )?;
         // 0x16 PropertyPtr (only in uncompressed #- streams)
-        let property_ptrs =
-            Self::parse_table(&mut reader, &ctx, TableId::PropertyPtr, PropertyPtrRow::parse)?;
+        let property_ptrs = Self::parse_table(
+            &mut reader,
+            &ctx,
+            TableId::PropertyPtr,
+            PropertyPtrRow::parse,
+        )?;
         // 0x17 Property
         let properties =
             Self::parse_table(&mut reader, &ctx, TableId::Property, PropertyRow::parse)?;
@@ -265,10 +284,16 @@ impl Metadata {
         // 0x20 Assembly
         let assemblies =
             Self::parse_table(&mut reader, &ctx, TableId::Assembly, AssemblyRow::parse)?;
-        // 0x21 AssemblyProcessor (skip)
-        Self::skip_table(&mut reader, &ctx, TableId::AssemblyProcessor)?;
-        // 0x22 AssemblyOs (skip)
-        Self::skip_table(&mut reader, &ctx, TableId::AssemblyOs)?;
+        // 0x21 AssemblyProcessor (deprecated)
+        let assembly_processors = Self::parse_table(
+            &mut reader,
+            &ctx,
+            TableId::AssemblyProcessor,
+            AssemblyProcessorRow::parse,
+        )?;
+        // 0x22 AssemblyOs (deprecated)
+        let assembly_oses =
+            Self::parse_table(&mut reader, &ctx, TableId::AssemblyOs, AssemblyOsRow::parse)?;
         // 0x23 AssemblyRef
         let assembly_refs = Self::parse_table(
             &mut reader,
@@ -276,16 +301,36 @@ impl Metadata {
             TableId::AssemblyRef,
             AssemblyRefRow::parse,
         )?;
-        // 0x24 AssemblyRefProcessor (skip)
-        Self::skip_table(&mut reader, &ctx, TableId::AssemblyRefProcessor)?;
-        // 0x25 AssemblyRefOs (skip)
-        Self::skip_table(&mut reader, &ctx, TableId::AssemblyRefOs)?;
-        // 0x26 File (skip)
-        Self::skip_table(&mut reader, &ctx, TableId::File)?;
-        // 0x27 ExportedType (skip)
-        Self::skip_table(&mut reader, &ctx, TableId::ExportedType)?;
-        // 0x28 ManifestResource (skip)
-        Self::skip_table(&mut reader, &ctx, TableId::ManifestResource)?;
+        // 0x24 AssemblyRefProcessor (deprecated)
+        let assembly_ref_processors = Self::parse_table(
+            &mut reader,
+            &ctx,
+            TableId::AssemblyRefProcessor,
+            AssemblyRefProcessorRow::parse,
+        )?;
+        // 0x25 AssemblyRefOs (deprecated)
+        let assembly_ref_oses = Self::parse_table(
+            &mut reader,
+            &ctx,
+            TableId::AssemblyRefOs,
+            AssemblyRefOsRow::parse,
+        )?;
+        // 0x26 File
+        let files = Self::parse_table(&mut reader, &ctx, TableId::File, FileRow::parse)?;
+        // 0x27 ExportedType
+        let exported_types = Self::parse_table(
+            &mut reader,
+            &ctx,
+            TableId::ExportedType,
+            ExportedTypeRow::parse,
+        )?;
+        // 0x28 ManifestResource
+        let manifest_resources = Self::parse_table(
+            &mut reader,
+            &ctx,
+            TableId::ManifestResource,
+            ManifestResourceRow::parse,
+        )?;
         // 0x29 NestedClass
         let nested_classes = Self::parse_table(
             &mut reader,
@@ -351,7 +396,14 @@ impl Metadata {
             enc_logs,
             enc_maps,
             assemblies,
+            assembly_processors,
+            assembly_oses,
             assembly_refs,
+            assembly_ref_processors,
+            assembly_ref_oses,
+            files,
+            exported_types,
+            manifest_resources,
             nested_classes,
             generic_params,
             method_specs,
@@ -389,13 +441,6 @@ impl Metadata {
             rows.push(parser(reader, ctx)?);
         }
         Ok(rows)
-    }
-
-    fn skip_table(reader: &mut Reader<'_>, ctx: &TableContext, table: TableId) -> Result<()> {
-        let count = ctx.row_count(table) as usize;
-        let row_size = ctx.row_size(table);
-        reader.read_bytes(count * row_size)?;
-        Ok(())
     }
 
     /// Get the runtime version string.
@@ -554,7 +599,10 @@ impl Metadata {
                 let row = self.get_type_def(coded_index.row)?;
                 let name = self.strings.get(row.type_name).ok()?.to_string();
                 let namespace = if row.type_namespace != 0 {
-                    self.strings.get(row.type_namespace).ok().map(|s| s.to_string())
+                    self.strings
+                        .get(row.type_namespace)
+                        .ok()
+                        .map(|s| s.to_string())
                 } else {
                     None
                 };
@@ -568,7 +616,10 @@ impl Metadata {
                 let row = self.get_type_ref(coded_index.row)?;
                 let name = self.strings.get(row.type_name).ok()?.to_string();
                 let namespace = if row.type_namespace != 0 {
-                    self.strings.get(row.type_namespace).ok().map(|s| s.to_string())
+                    self.strings
+                        .get(row.type_namespace)
+                        .ok()
+                        .map(|s| s.to_string())
                 } else {
                     None
                 };
@@ -842,7 +893,254 @@ impl Metadata {
             self.validate_blob_index(&mut errors, "AssemblyRef", i, "hash_value", row.hash_value);
         }
 
+        // Validate coded index references
+        self.validate_coded_indices(&mut errors);
+
+        // Validate sorted table requirements
+        self.validate_sorted_tables(&mut errors);
+
         errors
+    }
+
+    /// Validate coded index references point to valid rows.
+    fn validate_coded_indices(&self, errors: &mut Vec<String>) {
+        use crate::tables::{CodedIndex, CodedIndexKind};
+
+        // Helper to validate a coded index
+        let validate_coded = |errors: &mut Vec<String>,
+                              table: &str,
+                              row: usize,
+                              field: &str,
+                              idx: &CodedIndex,
+                              kind: CodedIndexKind| {
+            if idx.is_null() {
+                return;
+            }
+            if let Some(target_table) = idx.table {
+                let max_row = self.table_row_count(target_table);
+                if idx.row == 0 || idx.row > max_row {
+                    errors.push(format!(
+                        "{table}[{row}].{field}: invalid {kind:?} index pointing to {target_table:?} row {} (max: {max_row})",
+                        idx.row
+                    ));
+                }
+            } else {
+                errors.push(format!(
+                    "{table}[{row}].{field}: coded index has invalid table tag for {kind:?}"
+                ));
+            }
+        };
+
+        // TypeDef.extends
+        for (i, row) in self.type_defs.iter().enumerate() {
+            validate_coded(
+                errors,
+                "TypeDef",
+                i,
+                "extends",
+                &row.extends,
+                CodedIndexKind::TypeDefOrRef,
+            );
+        }
+
+        // InterfaceImpl.interface
+        for (i, row) in self.interface_impls.iter().enumerate() {
+            validate_coded(
+                errors,
+                "InterfaceImpl",
+                i,
+                "interface",
+                &row.interface,
+                CodedIndexKind::TypeDefOrRef,
+            );
+        }
+
+        // MemberRef.class
+        for (i, row) in self.member_refs.iter().enumerate() {
+            validate_coded(
+                errors,
+                "MemberRef",
+                i,
+                "class",
+                &row.class,
+                CodedIndexKind::MemberRefParent,
+            );
+        }
+
+        // Constant.parent
+        for (i, row) in self.constants.iter().enumerate() {
+            validate_coded(
+                errors,
+                "Constant",
+                i,
+                "parent",
+                &row.parent,
+                CodedIndexKind::HasConstant,
+            );
+        }
+
+        // CustomAttribute.parent and type
+        for (i, row) in self.custom_attributes.iter().enumerate() {
+            validate_coded(
+                errors,
+                "CustomAttribute",
+                i,
+                "parent",
+                &row.parent,
+                CodedIndexKind::HasCustomAttribute,
+            );
+            validate_coded(
+                errors,
+                "CustomAttribute",
+                i,
+                "type",
+                &row.attr_type,
+                CodedIndexKind::CustomAttributeType,
+            );
+        }
+
+        // GenericParamConstraint.constraint
+        for (i, row) in self.generic_param_constraints.iter().enumerate() {
+            validate_coded(
+                errors,
+                "GenericParamConstraint",
+                i,
+                "constraint",
+                &row.constraint,
+                CodedIndexKind::TypeDefOrRef,
+            );
+        }
+    }
+
+    /// Validate that tables that should be sorted are actually sorted.
+    fn validate_sorted_tables(&self, errors: &mut Vec<String>) {
+        // InterfaceImpl must be sorted by Class
+        for window in self.interface_impls.windows(2) {
+            if window[1].class < window[0].class {
+                errors.push(
+                    "InterfaceImpl table is not sorted by Class column".to_string(),
+                );
+                break;
+            }
+        }
+
+        // Constant must be sorted by Parent
+        for window in self.constants.windows(2) {
+            let key0 = self.coded_index_sort_key(&window[0].parent);
+            let key1 = self.coded_index_sort_key(&window[1].parent);
+            if key1 < key0 {
+                errors.push("Constant table is not sorted by Parent column".to_string());
+                break;
+            }
+        }
+
+        // FieldMarshal must be sorted by Parent
+        for window in self.field_marshals.windows(2) {
+            let key0 = self.coded_index_sort_key(&window[0].parent);
+            let key1 = self.coded_index_sort_key(&window[1].parent);
+            if key1 < key0 {
+                errors.push("FieldMarshal table is not sorted by Parent column".to_string());
+                break;
+            }
+        }
+
+        // MethodSemantics must be sorted by Association
+        for window in self.method_semantics.windows(2) {
+            let key0 = self.coded_index_sort_key(&window[0].association);
+            let key1 = self.coded_index_sort_key(&window[1].association);
+            if key1 < key0 {
+                errors.push(
+                    "MethodSemantics table is not sorted by Association column".to_string(),
+                );
+                break;
+            }
+        }
+
+        // ClassLayout must be sorted by Parent
+        for window in self.class_layouts.windows(2) {
+            if window[1].parent < window[0].parent {
+                errors
+                    .push("ClassLayout table is not sorted by Parent column".to_string());
+                break;
+            }
+        }
+
+        // NestedClass must be sorted by NestedClass column
+        for window in self.nested_classes.windows(2) {
+            if window[1].nested_class < window[0].nested_class {
+                errors.push(
+                    "NestedClass table is not sorted by NestedClass column".to_string(),
+                );
+                break;
+            }
+        }
+
+        // GenericParam must be sorted by Owner
+        for window in self.generic_params.windows(2) {
+            let key0 = self.coded_index_sort_key(&window[0].owner);
+            let key1 = self.coded_index_sort_key(&window[1].owner);
+            if key1 < key0 {
+                errors.push("GenericParam table is not sorted by Owner column".to_string());
+                break;
+            }
+        }
+    }
+
+    /// Get a sort key for coded index comparison.
+    fn coded_index_sort_key(&self, idx: &crate::tables::CodedIndex) -> (u8, u32) {
+        let table_id = idx.table.map_or(0xff, |t| t as u8);
+        (table_id, idx.row)
+    }
+
+    /// Get the row count for a table.
+    fn table_row_count(&self, table: TableId) -> u32 {
+        match table {
+            TableId::Module => self.modules.len() as u32,
+            TableId::TypeRef => self.type_refs.len() as u32,
+            TableId::TypeDef => self.type_defs.len() as u32,
+            TableId::FieldPtr => self.field_ptrs.len() as u32,
+            TableId::Field => self.fields.len() as u32,
+            TableId::MethodPtr => self.method_ptrs.len() as u32,
+            TableId::MethodDef => self.method_defs.len() as u32,
+            TableId::ParamPtr => self.param_ptrs.len() as u32,
+            TableId::Param => self.params.len() as u32,
+            TableId::InterfaceImpl => self.interface_impls.len() as u32,
+            TableId::MemberRef => self.member_refs.len() as u32,
+            TableId::Constant => self.constants.len() as u32,
+            TableId::CustomAttribute => self.custom_attributes.len() as u32,
+            TableId::FieldMarshal => self.field_marshals.len() as u32,
+            TableId::DeclSecurity => self.decl_securities.len() as u32,
+            TableId::ClassLayout => self.class_layouts.len() as u32,
+            TableId::FieldLayout => self.field_layouts.len() as u32,
+            TableId::StandAloneSig => self.stand_alone_sigs.len() as u32,
+            TableId::EventMap => self.event_maps.len() as u32,
+            TableId::EventPtr => self.event_ptrs.len() as u32,
+            TableId::Event => self.events.len() as u32,
+            TableId::PropertyMap => self.property_maps.len() as u32,
+            TableId::PropertyPtr => self.property_ptrs.len() as u32,
+            TableId::Property => self.properties.len() as u32,
+            TableId::MethodSemantics => self.method_semantics.len() as u32,
+            TableId::MethodImpl => self.method_impls.len() as u32,
+            TableId::ModuleRef => self.module_refs.len() as u32,
+            TableId::TypeSpec => self.type_specs.len() as u32,
+            TableId::ImplMap => self.impl_maps.len() as u32,
+            TableId::FieldRva => self.field_rvas.len() as u32,
+            TableId::EncLog => self.enc_logs.len() as u32,
+            TableId::EncMap => self.enc_maps.len() as u32,
+            TableId::Assembly => self.assemblies.len() as u32,
+            TableId::AssemblyProcessor => self.assembly_processors.len() as u32,
+            TableId::AssemblyOs => self.assembly_oses.len() as u32,
+            TableId::AssemblyRef => self.assembly_refs.len() as u32,
+            TableId::AssemblyRefProcessor => self.assembly_ref_processors.len() as u32,
+            TableId::AssemblyRefOs => self.assembly_ref_oses.len() as u32,
+            TableId::File => self.files.len() as u32,
+            TableId::ExportedType => self.exported_types.len() as u32,
+            TableId::ManifestResource => self.manifest_resources.len() as u32,
+            TableId::NestedClass => self.nested_classes.len() as u32,
+            TableId::GenericParam => self.generic_params.len() as u32,
+            TableId::MethodSpec => self.method_specs.len() as u32,
+            TableId::GenericParamConstraint => self.generic_param_constraints.len() as u32,
+        }
     }
 
     /// Validate that the metadata is structurally correct.
@@ -959,12 +1257,8 @@ impl AssemblyInfo {
     /// Format the public key token as a hex string (e.g., "b77a5c561934e089").
     #[must_use]
     pub fn public_key_token_string(&self) -> Option<String> {
-        self.public_key_token().map(|token| {
-            token
-                .iter()
-                .map(|b| format!("{b:02x}"))
-                .collect::<String>()
-        })
+        self.public_key_token()
+            .map(|token| token.iter().map(|b| format!("{b:02x}")).collect::<String>())
     }
 }
 
@@ -1066,7 +1360,12 @@ impl ResolvedType {
     #[must_use]
     pub fn full_name(&self) -> String {
         match self {
-            Self::TypeDef { name, namespace, .. } | Self::TypeRef { name, namespace, .. } => {
+            Self::TypeDef {
+                name, namespace, ..
+            }
+            | Self::TypeRef {
+                name, namespace, ..
+            } => {
                 if let Some(ns) = namespace
                     && !ns.is_empty()
                 {
@@ -1252,7 +1551,23 @@ impl Metadata {
         header.set_row_count(TableId::EncLog, self.enc_logs.len() as u32);
         header.set_row_count(TableId::EncMap, self.enc_maps.len() as u32);
         header.set_row_count(TableId::Assembly, self.assemblies.len() as u32);
+        header.set_row_count(
+            TableId::AssemblyProcessor,
+            self.assembly_processors.len() as u32,
+        );
+        header.set_row_count(TableId::AssemblyOs, self.assembly_oses.len() as u32);
         header.set_row_count(TableId::AssemblyRef, self.assembly_refs.len() as u32);
+        header.set_row_count(
+            TableId::AssemblyRefProcessor,
+            self.assembly_ref_processors.len() as u32,
+        );
+        header.set_row_count(TableId::AssemblyRefOs, self.assembly_ref_oses.len() as u32);
+        header.set_row_count(TableId::File, self.files.len() as u32);
+        header.set_row_count(TableId::ExportedType, self.exported_types.len() as u32);
+        header.set_row_count(
+            TableId::ManifestResource,
+            self.manifest_resources.len() as u32,
+        );
         header.set_row_count(TableId::NestedClass, self.nested_classes.len() as u32);
         header.set_row_count(TableId::GenericParam, self.generic_params.len() as u32);
         header.set_row_count(TableId::MethodSpec, self.method_specs.len() as u32);
@@ -1398,13 +1713,38 @@ impl Metadata {
         for row in &self.assemblies {
             row.write(writer, &ctx);
         }
-        // 0x21 AssemblyProcessor (skipped - not parsed)
-        // 0x22 AssemblyOs (skipped - not parsed)
+        // 0x21 AssemblyProcessor
+        for row in &self.assembly_processors {
+            row.write(writer, &ctx);
+        }
+        // 0x22 AssemblyOs
+        for row in &self.assembly_oses {
+            row.write(writer, &ctx);
+        }
         // 0x23 AssemblyRef
         for row in &self.assembly_refs {
             row.write(writer, &ctx);
         }
-        // 0x24-0x28 (skipped - not parsed)
+        // 0x24 AssemblyRefProcessor
+        for row in &self.assembly_ref_processors {
+            row.write(writer, &ctx);
+        }
+        // 0x25 AssemblyRefOs
+        for row in &self.assembly_ref_oses {
+            row.write(writer, &ctx);
+        }
+        // 0x26 File
+        for row in &self.files {
+            row.write(writer, &ctx);
+        }
+        // 0x27 ExportedType
+        for row in &self.exported_types {
+            row.write(writer, &ctx);
+        }
+        // 0x28 ManifestResource
+        for row in &self.manifest_resources {
+            row.write(writer, &ctx);
+        }
         // 0x29 NestedClass
         for row in &self.nested_classes {
             row.write(writer, &ctx);
