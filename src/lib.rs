@@ -59,9 +59,9 @@ pub use tables::{CodedIndex, CodedIndexKind, TableId, TablesHeader};
 // Re-export table rows
 pub use tables::{
     AssemblyRefRow, AssemblyRow, ClassLayoutRow, ConstantRow, CustomAttributeRow, DeclSecurityRow,
-    EventMapRow, EventRow, FieldLayoutRow, FieldMarshalRow, FieldRow, FieldRvaRow,
-    GenericParamConstraintRow, GenericParamRow, ImplMapRow, InterfaceImplRow, MemberRefRow,
-    MethodDefRow, MethodImplRow, MethodSemanticsRow, MethodSpecRow, ModuleRefRow, ModuleRow,
-    NestedClassRow, ParamRow, PropertyMapRow, PropertyRow, StandAloneSigRow, TypeDefRow,
-    TypeRefRow, TypeSpecRow,
+    EncLogRow, EncMapRow, EventMapRow, EventPtrRow, EventRow, FieldLayoutRow, FieldMarshalRow,
+    FieldPtrRow, FieldRow, FieldRvaRow, GenericParamConstraintRow, GenericParamRow, ImplMapRow,
+    InterfaceImplRow, MemberRefRow, MethodDefRow, MethodImplRow, MethodPtrRow, MethodSemanticsRow,
+    MethodSpecRow, ModuleRefRow, ModuleRow, NestedClassRow, ParamPtrRow, ParamRow, PropertyMapRow,
+    PropertyPtrRow, PropertyRow, StandAloneSigRow, TypeDefRow, TypeRefRow, TypeSpecRow,
 };

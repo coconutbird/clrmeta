@@ -6,12 +6,13 @@ use crate::reader::Reader;
 use crate::root::MetadataRoot;
 use crate::stream::StreamHeader;
 use crate::tables::{
-    AssemblyRefRow, AssemblyRow, ClassLayoutRow, ConstantRow, CustomAttributeRow,
-    DeclSecurityRow, EventMapRow, EventRow, FieldLayoutRow, FieldMarshalRow, FieldRow,
-    FieldRvaRow, GenericParamConstraintRow, GenericParamRow, ImplMapRow, InterfaceImplRow,
-    MemberRefRow, MethodDefRow, MethodImplRow, MethodSemanticsRow, MethodSpecRow, ModuleRefRow,
-    ModuleRow, NestedClassRow, ParamRow, PropertyMapRow, PropertyRow, StandAloneSigRow,
-    TableContext, TableId, TablesHeader, TypeDefRow, TypeRefRow, TypeSpecRow,
+    AssemblyRefRow, AssemblyRow, ClassLayoutRow, ConstantRow, CustomAttributeRow, DeclSecurityRow,
+    EncLogRow, EncMapRow, EventMapRow, EventPtrRow, EventRow, FieldLayoutRow, FieldMarshalRow,
+    FieldPtrRow, FieldRow, FieldRvaRow, GenericParamConstraintRow, GenericParamRow, ImplMapRow,
+    InterfaceImplRow, MemberRefRow, MethodDefRow, MethodImplRow, MethodPtrRow, MethodSemanticsRow,
+    MethodSpecRow, ModuleRefRow, ModuleRow, NestedClassRow, ParamPtrRow, ParamRow, PropertyMapRow,
+    PropertyPtrRow, PropertyRow, StandAloneSigRow, TableContext, TableId, TablesHeader, TypeDefRow,
+    TypeRefRow, TypeSpecRow,
 };
 use crate::writer::Writer;
 
@@ -38,10 +39,16 @@ pub struct Metadata {
     pub type_refs: Vec<TypeRefRow>,
     /// TypeDef table rows (0x02).
     pub type_defs: Vec<TypeDefRow>,
+    /// FieldPtr table rows (0x03) - only in uncompressed #- streams.
+    pub field_ptrs: Vec<FieldPtrRow>,
     /// Field table rows (0x04).
     pub fields: Vec<FieldRow>,
+    /// MethodPtr table rows (0x05) - only in uncompressed #- streams.
+    pub method_ptrs: Vec<MethodPtrRow>,
     /// MethodDef table rows (0x06).
     pub method_defs: Vec<MethodDefRow>,
+    /// ParamPtr table rows (0x07) - only in uncompressed #- streams.
+    pub param_ptrs: Vec<ParamPtrRow>,
     /// Param table rows (0x08).
     pub params: Vec<ParamRow>,
     /// InterfaceImpl table rows (0x09).
@@ -64,10 +71,14 @@ pub struct Metadata {
     pub stand_alone_sigs: Vec<StandAloneSigRow>,
     /// EventMap table rows (0x12).
     pub event_maps: Vec<EventMapRow>,
+    /// EventPtr table rows (0x13) - only in uncompressed #- streams.
+    pub event_ptrs: Vec<EventPtrRow>,
     /// Event table rows (0x14).
     pub events: Vec<EventRow>,
     /// PropertyMap table rows (0x15).
     pub property_maps: Vec<PropertyMapRow>,
+    /// PropertyPtr table rows (0x16) - only in uncompressed #- streams.
+    pub property_ptrs: Vec<PropertyPtrRow>,
     /// Property table rows (0x17).
     pub properties: Vec<PropertyRow>,
     /// MethodSemantics table rows (0x18).
@@ -82,6 +93,10 @@ pub struct Metadata {
     pub impl_maps: Vec<ImplMapRow>,
     /// FieldRva table rows (0x1D).
     pub field_rvas: Vec<FieldRvaRow>,
+    /// EncLog table rows (0x1E) - Edit-and-Continue log.
+    pub enc_logs: Vec<EncLogRow>,
+    /// EncMap table rows (0x1F) - Edit-and-Continue mapping.
+    pub enc_maps: Vec<EncMapRow>,
     /// Assembly table rows (0x20, usually 0 or 1).
     pub assemblies: Vec<AssemblyRow>,
     /// AssemblyRef table rows (0x23).
@@ -112,14 +127,15 @@ impl Metadata {
         let guids = Self::parse_heap(&root, data, StreamHeader::GUID, GuidHeap::parse)?;
         let blobs = Self::parse_heap(&root, data, StreamHeader::BLOB, BlobHeap::parse)?;
 
-        // Parse tables stream
+        // Parse tables stream (either #~ compressed or #- uncompressed)
         let tables_stream = root
             .tables_stream()
             .ok_or_else(|| Error::StreamNotFound(StreamHeader::TABLES.to_string()))?;
+        let uncompressed = tables_stream.name == StreamHeader::TABLES_UNCOMPRESSED;
         let tables_data = &data
             [tables_stream.offset as usize..(tables_stream.offset + tables_stream.size) as usize];
         let mut reader = Reader::new(tables_data);
-        let tables_header = TablesHeader::parse(&mut reader)?;
+        let tables_header = TablesHeader::parse(&mut reader, uncompressed)?;
         let ctx = tables_header.context();
 
         // Parse all tables in order (tables must be read sequentially)
@@ -129,22 +145,29 @@ impl Metadata {
         let type_refs = Self::parse_table(&mut reader, &ctx, TableId::TypeRef, TypeRefRow::parse)?;
         // 0x02 TypeDef
         let type_defs = Self::parse_table(&mut reader, &ctx, TableId::TypeDef, TypeDefRow::parse)?;
-        // 0x03 FieldPtr (skip)
-        Self::skip_table(&mut reader, &ctx, TableId::FieldPtr)?;
+        // 0x03 FieldPtr (only in uncompressed #- streams)
+        let field_ptrs =
+            Self::parse_table(&mut reader, &ctx, TableId::FieldPtr, FieldPtrRow::parse)?;
         // 0x04 Field
         let fields = Self::parse_table(&mut reader, &ctx, TableId::Field, FieldRow::parse)?;
-        // 0x05 MethodPtr (skip)
-        Self::skip_table(&mut reader, &ctx, TableId::MethodPtr)?;
+        // 0x05 MethodPtr (only in uncompressed #- streams)
+        let method_ptrs =
+            Self::parse_table(&mut reader, &ctx, TableId::MethodPtr, MethodPtrRow::parse)?;
         // 0x06 MethodDef
         let method_defs =
             Self::parse_table(&mut reader, &ctx, TableId::MethodDef, MethodDefRow::parse)?;
-        // 0x07 ParamPtr (skip)
-        Self::skip_table(&mut reader, &ctx, TableId::ParamPtr)?;
+        // 0x07 ParamPtr (only in uncompressed #- streams)
+        let param_ptrs =
+            Self::parse_table(&mut reader, &ctx, TableId::ParamPtr, ParamPtrRow::parse)?;
         // 0x08 Param
         let params = Self::parse_table(&mut reader, &ctx, TableId::Param, ParamRow::parse)?;
         // 0x09 InterfaceImpl
-        let interface_impls =
-            Self::parse_table(&mut reader, &ctx, TableId::InterfaceImpl, InterfaceImplRow::parse)?;
+        let interface_impls = Self::parse_table(
+            &mut reader,
+            &ctx,
+            TableId::InterfaceImpl,
+            InterfaceImplRow::parse,
+        )?;
         // 0x0A MemberRef
         let member_refs =
             Self::parse_table(&mut reader, &ctx, TableId::MemberRef, MemberRefRow::parse)?;
@@ -159,32 +182,58 @@ impl Metadata {
             CustomAttributeRow::parse,
         )?;
         // 0x0D FieldMarshal
-        let field_marshals =
-            Self::parse_table(&mut reader, &ctx, TableId::FieldMarshal, FieldMarshalRow::parse)?;
+        let field_marshals = Self::parse_table(
+            &mut reader,
+            &ctx,
+            TableId::FieldMarshal,
+            FieldMarshalRow::parse,
+        )?;
         // 0x0E DeclSecurity
-        let decl_securities =
-            Self::parse_table(&mut reader, &ctx, TableId::DeclSecurity, DeclSecurityRow::parse)?;
+        let decl_securities = Self::parse_table(
+            &mut reader,
+            &ctx,
+            TableId::DeclSecurity,
+            DeclSecurityRow::parse,
+        )?;
         // 0x0F ClassLayout
-        let class_layouts =
-            Self::parse_table(&mut reader, &ctx, TableId::ClassLayout, ClassLayoutRow::parse)?;
+        let class_layouts = Self::parse_table(
+            &mut reader,
+            &ctx,
+            TableId::ClassLayout,
+            ClassLayoutRow::parse,
+        )?;
         // 0x10 FieldLayout
-        let field_layouts =
-            Self::parse_table(&mut reader, &ctx, TableId::FieldLayout, FieldLayoutRow::parse)?;
+        let field_layouts = Self::parse_table(
+            &mut reader,
+            &ctx,
+            TableId::FieldLayout,
+            FieldLayoutRow::parse,
+        )?;
         // 0x11 StandAloneSig
-        let stand_alone_sigs =
-            Self::parse_table(&mut reader, &ctx, TableId::StandAloneSig, StandAloneSigRow::parse)?;
+        let stand_alone_sigs = Self::parse_table(
+            &mut reader,
+            &ctx,
+            TableId::StandAloneSig,
+            StandAloneSigRow::parse,
+        )?;
         // 0x12 EventMap
         let event_maps =
             Self::parse_table(&mut reader, &ctx, TableId::EventMap, EventMapRow::parse)?;
-        // 0x13 EventPtr (skip)
-        Self::skip_table(&mut reader, &ctx, TableId::EventPtr)?;
+        // 0x13 EventPtr (only in uncompressed #- streams)
+        let event_ptrs =
+            Self::parse_table(&mut reader, &ctx, TableId::EventPtr, EventPtrRow::parse)?;
         // 0x14 Event
         let events = Self::parse_table(&mut reader, &ctx, TableId::Event, EventRow::parse)?;
         // 0x15 PropertyMap
-        let property_maps =
-            Self::parse_table(&mut reader, &ctx, TableId::PropertyMap, PropertyMapRow::parse)?;
-        // 0x16 PropertyPtr (skip)
-        Self::skip_table(&mut reader, &ctx, TableId::PropertyPtr)?;
+        let property_maps = Self::parse_table(
+            &mut reader,
+            &ctx,
+            TableId::PropertyMap,
+            PropertyMapRow::parse,
+        )?;
+        // 0x16 PropertyPtr (only in uncompressed #- streams)
+        let property_ptrs =
+            Self::parse_table(&mut reader, &ctx, TableId::PropertyPtr, PropertyPtrRow::parse)?;
         // 0x17 Property
         let properties =
             Self::parse_table(&mut reader, &ctx, TableId::Property, PropertyRow::parse)?;
@@ -209,10 +258,10 @@ impl Metadata {
         // 0x1D FieldRva
         let field_rvas =
             Self::parse_table(&mut reader, &ctx, TableId::FieldRva, FieldRvaRow::parse)?;
-        // 0x1E EncLog (skip)
-        Self::skip_table(&mut reader, &ctx, TableId::EncLog)?;
-        // 0x1F EncMap (skip)
-        Self::skip_table(&mut reader, &ctx, TableId::EncMap)?;
+        // 0x1E EncLog
+        let enc_logs = Self::parse_table(&mut reader, &ctx, TableId::EncLog, EncLogRow::parse)?;
+        // 0x1F EncMap
+        let enc_maps = Self::parse_table(&mut reader, &ctx, TableId::EncMap, EncMapRow::parse)?;
         // 0x20 Assembly
         let assemblies =
             Self::parse_table(&mut reader, &ctx, TableId::Assembly, AssemblyRow::parse)?;
@@ -221,8 +270,12 @@ impl Metadata {
         // 0x22 AssemblyOs (skip)
         Self::skip_table(&mut reader, &ctx, TableId::AssemblyOs)?;
         // 0x23 AssemblyRef
-        let assembly_refs =
-            Self::parse_table(&mut reader, &ctx, TableId::AssemblyRef, AssemblyRefRow::parse)?;
+        let assembly_refs = Self::parse_table(
+            &mut reader,
+            &ctx,
+            TableId::AssemblyRef,
+            AssemblyRefRow::parse,
+        )?;
         // 0x24 AssemblyRefProcessor (skip)
         Self::skip_table(&mut reader, &ctx, TableId::AssemblyRefProcessor)?;
         // 0x25 AssemblyRefOs (skip)
@@ -234,11 +287,19 @@ impl Metadata {
         // 0x28 ManifestResource (skip)
         Self::skip_table(&mut reader, &ctx, TableId::ManifestResource)?;
         // 0x29 NestedClass
-        let nested_classes =
-            Self::parse_table(&mut reader, &ctx, TableId::NestedClass, NestedClassRow::parse)?;
+        let nested_classes = Self::parse_table(
+            &mut reader,
+            &ctx,
+            TableId::NestedClass,
+            NestedClassRow::parse,
+        )?;
         // 0x2A GenericParam
-        let generic_params =
-            Self::parse_table(&mut reader, &ctx, TableId::GenericParam, GenericParamRow::parse)?;
+        let generic_params = Self::parse_table(
+            &mut reader,
+            &ctx,
+            TableId::GenericParam,
+            GenericParamRow::parse,
+        )?;
         // 0x2B MethodSpec
         let method_specs =
             Self::parse_table(&mut reader, &ctx, TableId::MethodSpec, MethodSpecRow::parse)?;
@@ -260,8 +321,11 @@ impl Metadata {
             modules,
             type_refs,
             type_defs,
+            field_ptrs,
             fields,
+            method_ptrs,
             method_defs,
+            param_ptrs,
             params,
             interface_impls,
             member_refs,
@@ -273,8 +337,10 @@ impl Metadata {
             field_layouts,
             stand_alone_sigs,
             event_maps,
+            event_ptrs,
             events,
             property_maps,
+            property_ptrs,
             properties,
             method_semantics,
             method_impls,
@@ -282,6 +348,8 @@ impl Metadata {
             type_specs,
             impl_maps,
             field_rvas,
+            enc_logs,
+            enc_maps,
             assemblies,
             assembly_refs,
             nested_classes,
@@ -441,6 +509,215 @@ impl Metadata {
                 }
             })
             .collect()
+    }
+
+    // ========================================================================
+    // Validation
+    // ========================================================================
+
+    /// Validate the metadata structure.
+    ///
+    /// Performs structural integrity checks including:
+    /// - Required tables are present (Module must have at least 1 row)
+    /// - String indices are within bounds
+    /// - GUID indices are within bounds
+    /// - Blob indices are within bounds
+    /// - Table index references are valid
+    ///
+    /// Returns a list of validation errors. An empty list means the metadata is valid.
+    #[must_use]
+    pub fn validate(&self) -> Vec<String> {
+        let mut errors = Vec::new();
+
+        // Check required tables
+        if self.modules.is_empty() {
+            errors.push("Module table must have at least 1 row".to_string());
+        }
+
+        // Validate Module table
+        for (i, row) in self.modules.iter().enumerate() {
+            self.validate_string_index(&mut errors, "Module", i, "name", row.name);
+            self.validate_guid_index(&mut errors, "Module", i, "mvid", row.mvid);
+        }
+
+        // Validate TypeRef table
+        for (i, row) in self.type_refs.iter().enumerate() {
+            self.validate_string_index(&mut errors, "TypeRef", i, "type_name", row.type_name);
+            self.validate_string_index(
+                &mut errors,
+                "TypeRef",
+                i,
+                "type_namespace",
+                row.type_namespace,
+            );
+        }
+
+        // Validate TypeDef table
+        for (i, row) in self.type_defs.iter().enumerate() {
+            self.validate_string_index(&mut errors, "TypeDef", i, "type_name", row.type_name);
+            self.validate_string_index(
+                &mut errors,
+                "TypeDef",
+                i,
+                "type_namespace",
+                row.type_namespace,
+            );
+            self.validate_table_index(
+                &mut errors,
+                "TypeDef",
+                i,
+                "field_list",
+                row.field_list,
+                self.fields.len(),
+            );
+            self.validate_table_index(
+                &mut errors,
+                "TypeDef",
+                i,
+                "method_list",
+                row.method_list,
+                self.method_defs.len(),
+            );
+        }
+
+        // Validate Field table
+        for (i, row) in self.fields.iter().enumerate() {
+            self.validate_string_index(&mut errors, "Field", i, "name", row.name);
+            self.validate_blob_index(&mut errors, "Field", i, "signature", row.signature);
+        }
+
+        // Validate MethodDef table
+        for (i, row) in self.method_defs.iter().enumerate() {
+            self.validate_string_index(&mut errors, "MethodDef", i, "name", row.name);
+            self.validate_blob_index(&mut errors, "MethodDef", i, "signature", row.signature);
+            self.validate_table_index(
+                &mut errors,
+                "MethodDef",
+                i,
+                "param_list",
+                row.param_list,
+                self.params.len(),
+            );
+        }
+
+        // Validate Param table
+        for (i, row) in self.params.iter().enumerate() {
+            self.validate_string_index(&mut errors, "Param", i, "name", row.name);
+        }
+
+        // Validate MemberRef table
+        for (i, row) in self.member_refs.iter().enumerate() {
+            self.validate_string_index(&mut errors, "MemberRef", i, "name", row.name);
+            self.validate_blob_index(&mut errors, "MemberRef", i, "signature", row.signature);
+        }
+
+        // Validate Constant table
+        for (i, row) in self.constants.iter().enumerate() {
+            self.validate_blob_index(&mut errors, "Constant", i, "value", row.value);
+        }
+
+        // Validate CustomAttribute table
+        for (i, row) in self.custom_attributes.iter().enumerate() {
+            self.validate_blob_index(&mut errors, "CustomAttribute", i, "value", row.value);
+        }
+
+        // Validate Assembly table
+        for (i, row) in self.assemblies.iter().enumerate() {
+            self.validate_string_index(&mut errors, "Assembly", i, "name", row.name);
+            self.validate_string_index(&mut errors, "Assembly", i, "culture", row.culture);
+            self.validate_blob_index(&mut errors, "Assembly", i, "public_key", row.public_key);
+        }
+
+        // Validate AssemblyRef table
+        for (i, row) in self.assembly_refs.iter().enumerate() {
+            self.validate_string_index(&mut errors, "AssemblyRef", i, "name", row.name);
+            self.validate_string_index(&mut errors, "AssemblyRef", i, "culture", row.culture);
+            self.validate_blob_index(
+                &mut errors,
+                "AssemblyRef",
+                i,
+                "public_key_or_token",
+                row.public_key_or_token,
+            );
+            self.validate_blob_index(&mut errors, "AssemblyRef", i, "hash_value", row.hash_value);
+        }
+
+        errors
+    }
+
+    /// Validate that the metadata is structurally correct.
+    ///
+    /// Returns `Ok(())` if valid, or `Err` with the first validation error.
+    pub fn validate_strict(&self) -> Result<()> {
+        let errors = self.validate();
+        if let Some(first_error) = errors.into_iter().next() {
+            Err(Error::ValidationError(first_error))
+        } else {
+            Ok(())
+        }
+    }
+
+    fn validate_string_index(
+        &self,
+        errors: &mut Vec<String>,
+        table: &str,
+        row: usize,
+        field: &str,
+        index: u32,
+    ) {
+        if index != 0 && self.strings.get(index).is_err() {
+            errors.push(format!(
+                "{table}[{row}].{field}: invalid string index {index}"
+            ));
+        }
+    }
+
+    fn validate_guid_index(
+        &self,
+        errors: &mut Vec<String>,
+        table: &str,
+        row: usize,
+        field: &str,
+        index: u32,
+    ) {
+        if index != 0 && self.guids.get(index).is_err() {
+            errors.push(format!(
+                "{table}[{row}].{field}: invalid GUID index {index}"
+            ));
+        }
+    }
+
+    fn validate_blob_index(
+        &self,
+        errors: &mut Vec<String>,
+        table: &str,
+        row: usize,
+        field: &str,
+        index: u32,
+    ) {
+        if index != 0 && self.blobs.get(index).is_err() {
+            errors.push(format!(
+                "{table}[{row}].{field}: invalid blob index {index}"
+            ));
+        }
+    }
+
+    fn validate_table_index(
+        &self,
+        errors: &mut Vec<String>,
+        table: &str,
+        row: usize,
+        field: &str,
+        index: u32,
+        max_rows: usize,
+    ) {
+        // Table indices are 1-based, 0 means null
+        // A "list" index can be max_rows + 1 (meaning empty list at end)
+        if index > (max_rows as u32) + 1 {
+            errors.push(format!(
+                "{table}[{row}].{field}: invalid table index {index} (max {max_rows})"
+            ));
+        }
     }
 }
 
@@ -665,21 +942,29 @@ impl Metadata {
         header.set_row_count(TableId::Module, self.modules.len() as u32);
         header.set_row_count(TableId::TypeRef, self.type_refs.len() as u32);
         header.set_row_count(TableId::TypeDef, self.type_defs.len() as u32);
+        header.set_row_count(TableId::FieldPtr, self.field_ptrs.len() as u32);
         header.set_row_count(TableId::Field, self.fields.len() as u32);
+        header.set_row_count(TableId::MethodPtr, self.method_ptrs.len() as u32);
         header.set_row_count(TableId::MethodDef, self.method_defs.len() as u32);
+        header.set_row_count(TableId::ParamPtr, self.param_ptrs.len() as u32);
         header.set_row_count(TableId::Param, self.params.len() as u32);
         header.set_row_count(TableId::InterfaceImpl, self.interface_impls.len() as u32);
         header.set_row_count(TableId::MemberRef, self.member_refs.len() as u32);
         header.set_row_count(TableId::Constant, self.constants.len() as u32);
-        header.set_row_count(TableId::CustomAttribute, self.custom_attributes.len() as u32);
+        header.set_row_count(
+            TableId::CustomAttribute,
+            self.custom_attributes.len() as u32,
+        );
         header.set_row_count(TableId::FieldMarshal, self.field_marshals.len() as u32);
         header.set_row_count(TableId::DeclSecurity, self.decl_securities.len() as u32);
         header.set_row_count(TableId::ClassLayout, self.class_layouts.len() as u32);
         header.set_row_count(TableId::FieldLayout, self.field_layouts.len() as u32);
         header.set_row_count(TableId::StandAloneSig, self.stand_alone_sigs.len() as u32);
         header.set_row_count(TableId::EventMap, self.event_maps.len() as u32);
+        header.set_row_count(TableId::EventPtr, self.event_ptrs.len() as u32);
         header.set_row_count(TableId::Event, self.events.len() as u32);
         header.set_row_count(TableId::PropertyMap, self.property_maps.len() as u32);
+        header.set_row_count(TableId::PropertyPtr, self.property_ptrs.len() as u32);
         header.set_row_count(TableId::Property, self.properties.len() as u32);
         header.set_row_count(TableId::MethodSemantics, self.method_semantics.len() as u32);
         header.set_row_count(TableId::MethodImpl, self.method_impls.len() as u32);
@@ -687,12 +972,17 @@ impl Metadata {
         header.set_row_count(TableId::TypeSpec, self.type_specs.len() as u32);
         header.set_row_count(TableId::ImplMap, self.impl_maps.len() as u32);
         header.set_row_count(TableId::FieldRva, self.field_rvas.len() as u32);
+        header.set_row_count(TableId::EncLog, self.enc_logs.len() as u32);
+        header.set_row_count(TableId::EncMap, self.enc_maps.len() as u32);
         header.set_row_count(TableId::Assembly, self.assemblies.len() as u32);
         header.set_row_count(TableId::AssemblyRef, self.assembly_refs.len() as u32);
         header.set_row_count(TableId::NestedClass, self.nested_classes.len() as u32);
         header.set_row_count(TableId::GenericParam, self.generic_params.len() as u32);
         header.set_row_count(TableId::MethodSpec, self.method_specs.len() as u32);
-        header.set_row_count(TableId::GenericParamConstraint, self.generic_param_constraints.len() as u32);
+        header.set_row_count(
+            TableId::GenericParamConstraint,
+            self.generic_param_constraints.len() as u32,
+        );
 
         header.write_to(writer);
 
@@ -711,17 +1001,26 @@ impl Metadata {
         for row in &self.type_defs {
             row.write(writer, &ctx);
         }
-        // 0x03 FieldPtr (skipped - count is 0)
+        // 0x03 FieldPtr
+        for row in &self.field_ptrs {
+            row.write(writer, &ctx);
+        }
         // 0x04 Field
         for row in &self.fields {
             row.write(writer, &ctx);
         }
-        // 0x05 MethodPtr (skipped - count is 0)
+        // 0x05 MethodPtr
+        for row in &self.method_ptrs {
+            row.write(writer, &ctx);
+        }
         // 0x06 MethodDef
         for row in &self.method_defs {
             row.write(writer, &ctx);
         }
-        // 0x07 ParamPtr (skipped - count is 0)
+        // 0x07 ParamPtr
+        for row in &self.param_ptrs {
+            row.write(writer, &ctx);
+        }
         // 0x08 Param
         for row in &self.params {
             row.write(writer, &ctx);
@@ -766,7 +1065,10 @@ impl Metadata {
         for row in &self.event_maps {
             row.write(writer, &ctx);
         }
-        // 0x13 EventPtr (skipped - count is 0)
+        // 0x13 EventPtr
+        for row in &self.event_ptrs {
+            row.write(writer, &ctx);
+        }
         // 0x14 Event
         for row in &self.events {
             row.write(writer, &ctx);
@@ -775,7 +1077,10 @@ impl Metadata {
         for row in &self.property_maps {
             row.write(writer, &ctx);
         }
-        // 0x16 PropertyPtr (skipped - count is 0)
+        // 0x16 PropertyPtr
+        for row in &self.property_ptrs {
+            row.write(writer, &ctx);
+        }
         // 0x17 Property
         for row in &self.properties {
             row.write(writer, &ctx);
@@ -804,8 +1109,14 @@ impl Metadata {
         for row in &self.field_rvas {
             row.write(writer, &ctx);
         }
-        // 0x1E EncLog (skipped - not parsed)
-        // 0x1F EncMap (skipped - not parsed)
+        // 0x1E EncLog
+        for row in &self.enc_logs {
+            row.write(writer, &ctx);
+        }
+        // 0x1F EncMap
+        for row in &self.enc_maps {
+            row.write(writer, &ctx);
+        }
         // 0x20 Assembly
         for row in &self.assemblies {
             row.write(writer, &ctx);

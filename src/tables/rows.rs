@@ -51,6 +51,120 @@ pub struct TypeRefRow {
     pub type_namespace: u32,
 }
 
+// ============================================================================
+// Ptr tables (used in uncompressed #- streams)
+// ============================================================================
+
+/// FieldPtr table row (0x03) - indirection to Field table.
+/// Only present in uncompressed (#-) metadata streams.
+#[derive(Debug, Clone, Default)]
+pub struct FieldPtrRow {
+    /// Index into the Field table.
+    pub field: u32,
+}
+
+impl FieldPtrRow {
+    pub fn parse(reader: &mut Reader<'_>, ctx: &TableContext) -> Result<Self> {
+        use crate::tables::TableId;
+        Ok(Self {
+            field: reader.read_index(ctx.wide_table_index(TableId::Field))?,
+        })
+    }
+
+    pub fn write(&self, writer: &mut Writer, ctx: &TableContext) {
+        use crate::tables::TableId;
+        writer.write_index(self.field, ctx.wide_table_index(TableId::Field));
+    }
+}
+
+/// MethodPtr table row (0x05) - indirection to MethodDef table.
+/// Only present in uncompressed (#-) metadata streams.
+#[derive(Debug, Clone, Default)]
+pub struct MethodPtrRow {
+    /// Index into the MethodDef table.
+    pub method: u32,
+}
+
+impl MethodPtrRow {
+    pub fn parse(reader: &mut Reader<'_>, ctx: &TableContext) -> Result<Self> {
+        use crate::tables::TableId;
+        Ok(Self {
+            method: reader.read_index(ctx.wide_table_index(TableId::MethodDef))?,
+        })
+    }
+
+    pub fn write(&self, writer: &mut Writer, ctx: &TableContext) {
+        use crate::tables::TableId;
+        writer.write_index(self.method, ctx.wide_table_index(TableId::MethodDef));
+    }
+}
+
+/// ParamPtr table row (0x07) - indirection to Param table.
+/// Only present in uncompressed (#-) metadata streams.
+#[derive(Debug, Clone, Default)]
+pub struct ParamPtrRow {
+    /// Index into the Param table.
+    pub param: u32,
+}
+
+impl ParamPtrRow {
+    pub fn parse(reader: &mut Reader<'_>, ctx: &TableContext) -> Result<Self> {
+        use crate::tables::TableId;
+        Ok(Self {
+            param: reader.read_index(ctx.wide_table_index(TableId::Param))?,
+        })
+    }
+
+    pub fn write(&self, writer: &mut Writer, ctx: &TableContext) {
+        use crate::tables::TableId;
+        writer.write_index(self.param, ctx.wide_table_index(TableId::Param));
+    }
+}
+
+/// EventPtr table row (0x13) - indirection to Event table.
+/// Only present in uncompressed (#-) metadata streams.
+#[derive(Debug, Clone, Default)]
+pub struct EventPtrRow {
+    /// Index into the Event table.
+    pub event: u32,
+}
+
+impl EventPtrRow {
+    pub fn parse(reader: &mut Reader<'_>, ctx: &TableContext) -> Result<Self> {
+        use crate::tables::TableId;
+        Ok(Self {
+            event: reader.read_index(ctx.wide_table_index(TableId::Event))?,
+        })
+    }
+
+    pub fn write(&self, writer: &mut Writer, ctx: &TableContext) {
+        use crate::tables::TableId;
+        writer.write_index(self.event, ctx.wide_table_index(TableId::Event));
+    }
+}
+
+/// PropertyPtr table row (0x16) - indirection to Property table.
+/// Only present in uncompressed (#-) metadata streams.
+#[derive(Debug, Clone, Default)]
+pub struct PropertyPtrRow {
+    /// Index into the Property table.
+    pub property: u32,
+}
+
+impl PropertyPtrRow {
+    pub fn parse(reader: &mut Reader<'_>, ctx: &TableContext) -> Result<Self> {
+        use crate::tables::TableId;
+        Ok(Self {
+            property: reader.read_index(ctx.wide_table_index(TableId::Property))?,
+        })
+    }
+
+    pub fn write(&self, writer: &mut Writer, ctx: &TableContext) {
+        use crate::tables::TableId;
+        writer.write_index(self.property, ctx.wide_table_index(TableId::Property));
+    }
+}
+
 impl TypeRefRow {
     pub fn parse(reader: &mut Reader<'_>, ctx: &TableContext) -> Result<Self> {
         let wide = ctx.wide_coded_index(CodedIndexKind::ResolutionScope);
@@ -882,6 +996,48 @@ impl FieldRvaRow {
         use crate::tables::TableId;
         writer.write_u32(self.rva);
         writer.write_index(self.field, ctx.wide_table_index(TableId::Field));
+    }
+}
+
+/// EncLog table row (0x1E) - Edit-and-Continue log.
+#[derive(Debug, Clone, Default)]
+pub struct EncLogRow {
+    /// Token of the modified metadata item.
+    pub token: u32,
+    /// Operation performed (add, modify, etc.).
+    pub func_code: u32,
+}
+
+impl EncLogRow {
+    pub fn parse(reader: &mut Reader<'_>, _ctx: &TableContext) -> Result<Self> {
+        Ok(Self {
+            token: reader.read_u32()?,
+            func_code: reader.read_u32()?,
+        })
+    }
+
+    pub fn write(&self, writer: &mut Writer, _ctx: &TableContext) {
+        writer.write_u32(self.token);
+        writer.write_u32(self.func_code);
+    }
+}
+
+/// EncMap table row (0x1F) - Edit-and-Continue mapping.
+#[derive(Debug, Clone, Default)]
+pub struct EncMapRow {
+    /// Token that has been remapped.
+    pub token: u32,
+}
+
+impl EncMapRow {
+    pub fn parse(reader: &mut Reader<'_>, _ctx: &TableContext) -> Result<Self> {
+        Ok(Self {
+            token: reader.read_u32()?,
+        })
+    }
+
+    pub fn write(&self, writer: &mut Writer, _ctx: &TableContext) {
+        writer.write_u32(self.token);
     }
 }
 

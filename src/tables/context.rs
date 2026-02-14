@@ -107,7 +107,9 @@ impl TableContext {
                     + self.table_index_size(TableId::Field)
                     + self.table_index_size(TableId::MethodDef)
             }
+            TableId::FieldPtr => self.table_index_size(TableId::Field),
             TableId::Field => 2 + self.string_index_size() + self.blob_index_size(),
+            TableId::MethodPtr => self.table_index_size(TableId::MethodDef),
             TableId::MethodDef => {
                 4 + 2
                     + 2
@@ -115,6 +117,7 @@ impl TableContext {
                     + self.blob_index_size()
                     + self.table_index_size(TableId::Param)
             }
+            TableId::ParamPtr => self.table_index_size(TableId::Param),
             TableId::Param => 2 + 2 + self.string_index_size(),
             TableId::InterfaceImpl => {
                 self.table_index_size(TableId::TypeDef)
@@ -151,12 +154,14 @@ impl TableContext {
             TableId::EventMap => {
                 self.table_index_size(TableId::TypeDef) + self.table_index_size(TableId::Event)
             }
+            TableId::EventPtr => self.table_index_size(TableId::Event),
             TableId::Event => {
                 2 + self.string_index_size() + self.coded_index_size(CodedIndexKind::TypeDefOrRef)
             }
             TableId::PropertyMap => {
                 self.table_index_size(TableId::TypeDef) + self.table_index_size(TableId::Property)
             }
+            TableId::PropertyPtr => self.table_index_size(TableId::Property),
             TableId::Property => 2 + self.string_index_size() + self.blob_index_size(),
             TableId::MethodSemantics => {
                 2 + self.table_index_size(TableId::MethodDef)
@@ -174,6 +179,8 @@ impl TableContext {
                     + self.table_index_size(TableId::ModuleRef)
             }
             TableId::FieldRva => 4 + self.table_index_size(TableId::Field),
+            TableId::EncLog => 4 + 4, // token + func_code
+            TableId::EncMap => 4,     // token
             TableId::NestedClass => self.table_index_size(TableId::TypeDef) * 2,
             TableId::GenericParam => {
                 2 + 2

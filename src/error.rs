@@ -72,4 +72,8 @@ pub enum Error {
         /// Maximum valid index.
         max: u32,
     },
+
+    /// Metadata validation error.
+    #[error("validation error: {0}")]
+    ValidationError(String),
 }

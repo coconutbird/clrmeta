@@ -152,13 +152,21 @@ mod tests {
     #[test]
     fn test_parse_heap() {
         let data: [u8; 32] = [
-            1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16,  // GUID 1
+            1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, // GUID 1
             17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, // GUID 2
         ];
         let heap = GuidHeap::parse(&data);
         assert_eq!(heap.count(), 2);
-        assert_eq!(heap.get(1).unwrap(), [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]);
-        assert_eq!(heap.get(2).unwrap(), [17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32]);
+        assert_eq!(
+            heap.get(1).unwrap(),
+            [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]
+        );
+        assert_eq!(
+            heap.get(2).unwrap(),
+            [
+                17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32
+            ]
+        );
     }
 
     #[test]
@@ -167,9 +175,9 @@ mod tests {
         // In memory (little-endian for first 3 parts):
         let guid: Guid = [
             0x00, 0x84, 0x0e, 0x55, // Data1: 550e8400 (LE)
-            0x9b, 0xe2,             // Data2: e29b (LE)
-            0xd4, 0x41,             // Data3: 41d4 (LE)
-            0xa7, 0x16,             // Data4[0..2]
+            0x9b, 0xe2, // Data2: e29b (LE)
+            0xd4, 0x41, // Data3: 41d4 (LE)
+            0xa7, 0x16, // Data4[0..2]
             0x44, 0x66, 0x55, 0x44, 0x00, 0x00, // Data4[2..8]
         ];
         let formatted = format_guid(&guid);
@@ -179,8 +187,8 @@ mod tests {
     #[test]
     fn test_iter() {
         let data: [u8; 32] = [
-            1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16,
-            17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32,
+            1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24,
+            25, 26, 27, 28, 29, 30, 31, 32,
         ];
         let heap = GuidHeap::parse(&data);
         let guids: Vec<_> = heap.iter().collect();

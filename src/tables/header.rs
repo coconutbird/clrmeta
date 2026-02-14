@@ -1,11 +1,14 @@
-//! Tables stream (#~) header parsing and writing.
+//! Tables stream (#~ or #-) header parsing and writing.
 
 use crate::error::Result;
 use crate::reader::Reader;
 use crate::tables::{TableContext, TableId};
 use crate::writer::Writer;
 
-/// The tables stream (#~) header.
+/// The tables stream header (works for both #~ and #-).
+///
+/// #~ = compressed/optimized tables (most common)
+/// #- = uncompressed tables (includes Ptr tables, used by obfuscators/older tools)
 #[derive(Debug, Clone)]
 pub struct TablesHeader {
     /// Reserved (should be 0).
@@ -27,11 +30,16 @@ pub struct TablesHeader {
     pub sorted: u64,
     /// Row counts for each valid table.
     pub row_counts: [u32; 64],
+    /// Whether this is an uncompressed (#-) stream.
+    pub uncompressed: bool,
 }
 
 impl TablesHeader {
     /// Parse the tables header from a reader.
-    pub fn parse(reader: &mut Reader<'_>) -> Result<Self> {
+    ///
+    /// The `uncompressed` parameter indicates whether this is a #- stream
+    /// (uncompressed tables with Ptr tables) or a #~ stream (compressed).
+    pub fn parse(reader: &mut Reader<'_>, uncompressed: bool) -> Result<Self> {
         let reserved = reader.read_u32()?;
         let major_version = reader.read_u8()?;
         let minor_version = reader.read_u8()?;
@@ -57,6 +65,7 @@ impl TablesHeader {
             valid,
             sorted,
             row_counts,
+            uncompressed,
         })
     }
 
