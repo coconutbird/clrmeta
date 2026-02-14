@@ -2,12 +2,15 @@
 name = "clrmeta"
 version = "0.1.0"
 edition = "2024"
+rust-version = "1.85"
 description = "ECMA-335 CLI/.NET metadata parsing library with read/write support"
 license = "MIT"
 repository = "https://github.com/coconutbird/clrmeta"
+documentation = "https://docs.rs/clrmeta"
 readme = "README.md"
 keywords = ["clr", "dotnet", "metadata", "ecma-335", "msil"]
 categories = ["parsing", "development-tools"]
+exclude = ["target/", ".git/", ".gitignore"]
 
 [dependencies]
 thiserror = "2"

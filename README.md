@@ -2,7 +2,18 @@
 
 ECMA-335 CLI/.NET metadata parsing library for Rust.
 
+[![Crates.io](https://img.shields.io/crates/v/clrmeta.svg)](https://crates.io/crates/clrmeta)
+[![Documentation](https://docs.rs/clrmeta/badge.svg)](https://docs.rs/clrmeta)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
+## Installation
+
+Add to your `Cargo.toml`:
+
+```toml
+[dependencies]
+clrmeta = "0.1"
+```
 
 ## Features
 
