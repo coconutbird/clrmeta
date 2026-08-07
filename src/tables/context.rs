@@ -96,7 +96,7 @@ impl TableContext {
     #[must_use]
     pub fn row_size(&self, table: TableId) -> usize {
         match table {
-            TableId::Module => 2 + self.string_index_size() * 2 + self.guid_index_size() * 3,
+            TableId::Module => 2 + self.string_index_size() + self.guid_index_size() * 3,
             TableId::TypeRef => {
                 self.coded_index_size(CodedIndexKind::ResolutionScope)
                     + self.string_index_size() * 2
@@ -196,6 +196,29 @@ impl TableContext {
             }
             // Remaining tables return 0 (not implemented)
             _ => 0,
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::tables::ModuleRow;
+    use crate::writer::Writer;
+
+    #[test]
+    fn test_module_row_size_matches_written_bytes_for_heap_index_widths() {
+        let cases = [(0x00, 10), (0x01, 12), (0x02, 16), (0x03, 18)];
+
+        for (heap_sizes, expected_size) in cases {
+            let ctx = TableContext::new(heap_sizes, [0; 64]);
+            let row = ModuleRow::default();
+            let mut writer = Writer::new();
+
+            row.write(&mut writer, &ctx);
+
+            assert_eq!(ctx.row_size(TableId::Module), expected_size);
+            assert_eq!(writer.len(), expected_size);
         }
     }
 }

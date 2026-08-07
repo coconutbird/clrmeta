@@ -1758,3 +1758,129 @@ impl Metadata {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn metadata_with_module_and_field() -> Vec<u8> {
+        let mut strings = StringsHeap::new();
+        let module_name = strings.add("module");
+        let field_name = strings.add("field");
+
+        let mut guids = GuidHeap::new();
+        let mvid = guids.add(&[0x11; 16]);
+
+        let mut blobs = BlobHeap::new();
+        let field_signature = blobs.add(&[0x06, 0x08]);
+
+        let mut row_counts = [0; 64];
+        row_counts[TableId::Module as usize] = 1;
+        row_counts[TableId::Field as usize] = 1;
+
+        let tables_header = TablesHeader {
+            reserved: 0,
+            major_version: 2,
+            minor_version: 0,
+            heap_sizes: 0,
+            reserved2: 1,
+            valid: (1 << (TableId::Module as u8)) | (1 << (TableId::Field as u8)),
+            sorted: 0,
+            row_counts,
+            uncompressed: false,
+        };
+        let ctx = tables_header.context();
+
+        let mut tables_writer = Writer::new();
+        tables_header.write_to(&mut tables_writer);
+        ModuleRow {
+            generation: 0,
+            name: module_name,
+            mvid,
+            enc_id: 0,
+            enc_base_id: 0,
+        }
+        .write(&mut tables_writer, &ctx);
+        FieldRow {
+            flags: 0,
+            name: field_name,
+            signature: field_signature,
+        }
+        .write(&mut tables_writer, &ctx);
+        let tables = tables_writer.into_inner();
+
+        // This alignment is what exposes a two-byte Module row-size overcount:
+        // the actual table data is aligned, while the overcount crosses into the
+        // next four-byte boundary.
+        assert_eq!(tables.len() % 4, 0);
+
+        let mut root = MetadataRoot {
+            major_version: 1,
+            minor_version: 1,
+            reserved: 0,
+            version: "v4.0.30319".to_string(),
+            flags: 0,
+            streams: vec![
+                StreamHeader {
+                    offset: 0,
+                    size: 0,
+                    name: StreamHeader::TABLES.to_string(),
+                },
+                StreamHeader {
+                    offset: 0,
+                    size: 0,
+                    name: StreamHeader::STRINGS.to_string(),
+                },
+                StreamHeader {
+                    offset: 0,
+                    size: 0,
+                    name: StreamHeader::GUID.to_string(),
+                },
+                StreamHeader {
+                    offset: 0,
+                    size: 0,
+                    name: StreamHeader::BLOB.to_string(),
+                },
+            ],
+        };
+
+        let stream_sizes = [tables.len(), strings.size(), guids.size(), blobs.size()];
+        let mut offset = root.header_size();
+        for (stream, size) in root.streams.iter_mut().zip(stream_sizes) {
+            stream.offset = offset as u32;
+            stream.size = size as u32;
+            offset = (offset + size + 3) & !3;
+        }
+
+        let mut writer = Writer::new();
+        root.write_to(&mut writer);
+        writer.write_bytes(&tables);
+        writer.align(4);
+        strings.write_to(&mut writer);
+        writer.align(4);
+        guids.write_to(&mut writer);
+        writer.align(4);
+        blobs.write_to(&mut writer);
+        writer.align(4);
+        writer.into_inner()
+    }
+
+    #[test]
+    fn test_metadata_roundtrip_preserves_heaps_after_module_row() {
+        let metadata = Metadata::parse(&metadata_with_module_and_field()).unwrap();
+        let initial_errors = metadata.validate();
+        assert!(initial_errors.is_empty(), "{initial_errors:#?}");
+
+        let expected_strings = metadata.strings.write();
+        let expected_guids = metadata.guids.write();
+        let expected_blobs = metadata.blobs.write();
+
+        let reparsed = Metadata::parse(&metadata.write()).unwrap();
+        let roundtrip_errors = reparsed.validate();
+
+        assert!(roundtrip_errors.is_empty(), "{roundtrip_errors:#?}");
+        assert_eq!(reparsed.strings.data(), expected_strings);
+        assert_eq!(reparsed.guids.data(), expected_guids);
+        assert_eq!(reparsed.blobs.data(), expected_blobs);
+    }
+}
